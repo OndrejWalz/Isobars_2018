@@ -217,18 +217,44 @@ int StPicoHFJetMaker::MakeJets() {
   vector<fastjet::PseudoJet> fullTracks;
   vector<fastjet::PseudoJet> MCjetTracks;
 
-  fRunNumber = mPicoDst->event()->runId();
-  fEventId = mPicoDst->event()->eventId(); // eventID
-  int refMult = mPicoDst->event()->refMult();
-  double vz = mPrimVtx.z();
-  mRefmultCorrUtil->setEvent(fRunNumber, refMult, mPicoDst->event()->ZDCx(),
-                             vz);
-  fCentrality = mRefmultCorrUtil->centrality9(); // 0 = 0-5 %,..., 8 = 70-80
-                                                 // %
-  if (fCentrality == -1)
-    return kStOK; // no fCentrality
+  // fRunNumber = mPicoDst->event()->runId();
+  // fEventId = mPicoDst->event()->eventId(); // eventID
+  // int refMult = mPicoDst->event()->grefMult();
+  // double vz = mPrimVtx.z();
 
-  fCentralityWeight = mRefmultCorrUtil->weight();
+  //         StRefMultCorr mRefMultCorrUtil( "refmult", "Isobar");
+  //       mRefMultCorrUtil.init( picoEvent->runId() );
+  //       mRefMultCorrUtil.initEvent( picoEvent->refMult(), picoEvent->primaryVertex().Z(), picoEvent->ZDCx() );
+  //       Float_t refMultCorr = mRefMultCorrUtil.getRefMultCorr();
+  // //mRefmultCorrUtil->setEvent(fRunNumber, refMult, mPicoDst->event()->ZDCx(),
+  // //                           vz);
+  // fCentrality = mRefmultCorrUtil->centrality9(); // 0 = 0-5 %,..., 8 = 70-80
+  //                                                // %
+
+  fRunNumber = mPicoDst->event()->runId();
+  fEventId   = mPicoDst->event()->eventId();
+  int refMult = mPicoDst->event()->refMult();
+  double vz  = mPrimVtx.z();
+
+  // -- Centrality via StRefMultCorr (isobar API)
+  mRefmultCorrUtil->init(fRunNumber);
+  mRefmultCorrUtil->initEvent((UShort_t)refMult, vz, mPicoDst->event()->ZDCx());
+
+  double refMultCorr = mRefmultCorrUtil->getRefMultCorr();
+  fCentralityWeight  = mRefmultCorrUtil->getWeight();  
+
+  // -- Centrality bin from Table 1 (Ru boundaries)
+  if      (refMultCorr > 216) fCentrality = 0;
+  else if (refMultCorr > 151) fCentrality = 1;
+  else if (refMultCorr > 103) fCentrality = 2;
+  else if (refMultCorr >  69) fCentrality = 3;
+  else if (refMultCorr >  44) fCentrality = 4;
+  else if (refMultCorr >  26) fCentrality = 5;
+  else if (refMultCorr >  15) fCentrality = 6;
+  else if (refMultCorr >   8) fCentrality = 7;
+  else                        fCentrality = -1;
+
+  if (fCentrality == -1) return kStOK;  
 
   if (hcent9) hcent9->Fill(fCentrality, fCentralityWeight);
 

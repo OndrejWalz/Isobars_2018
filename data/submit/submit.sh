@@ -10,7 +10,7 @@ treeName="jetTree"
 # -- root macro
 rootMacro="runPicoHFJetMaker.C"
 # -- bad run list file
-badRunListFileName="BadRunList_14.list"
+badRunListFileName="BadRunList.list"
 # -- production Id
 productionId=$(date +%F)
 # -- set STAR software version

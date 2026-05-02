@@ -240,20 +240,23 @@ void runPicoHFJetMaker(TString inputFile, TString outputFile = "output",
 
 
   // Also add protection for StRefMultCorr
-  StRefMultCorr *grefmultCorrUtil;
-  try {
-    grefmultCorrUtil =
-        CentralityMaker::instance()->getRefMultCorr_P18ih_VpdMB30_MidLow();
-    if (grefmultCorrUtil) {
-      stPicoHFJetMaker->setRefMultCorr(grefmultCorrUtil);
-      cout << "RefMultCorr set successfully" << endl;
-    } else {
-      cout << "WARNING: RefMultCorr is null, skipping..." << endl;
-    }
-  } catch (...) {
-    cout << "ERROR: Exception when getting RefMultCorr" << endl;
-  }
-
+  // StRefMultCorr *grefmultCorrUtil;
+  // try {
+  //   grefmultCorrUtil =
+  //       CentralityMaker::instance()->getRefMultCorr_P18ih_VpdMB30_MidLow();
+  //   if (grefmultCorrUtil) {
+  //     stPicoHFJetMaker->setRefMultCorr(grefmultCorrUtil);
+  //     cout << "RefMultCorr set successfully" << endl;
+  //   } else {
+  //     cout << "WARNING: RefMultCorr is null, skipping..." << endl;
+  //   }
+  // } catch (...) {
+  //   cout << "ERROR: Exception when getting RefMultCorr" << endl;
+  // }
+  // REPLACE the commented-out block with this:
+  StRefMultCorr *grefmultCorrUtil = new StRefMultCorr("refmult", "Isobar");
+  stPicoHFJetMaker->setRefMultCorr(grefmultCorrUtil);
+  cout << "RefMultCorr set successfully" << endl;
   // ========================================================================================
 
   chain->Init();
