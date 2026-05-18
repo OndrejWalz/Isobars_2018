@@ -21,7 +21,7 @@ embedding_lists=(
     "filelists/embedding/pt50_-1.list"
 )
 
-real_data_list="filelists/ru_2018.list"
+real_data_list="filelists/zr_2018_test.list"
 
 if [[ "$run_mode" == "embedding" || -z "$run_mode" ]]; then
   for list_file in "${embedding_lists[@]}"; do

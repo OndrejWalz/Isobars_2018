@@ -16,7 +16,7 @@ productionId=$(date +%F)
 # -- set STAR software version
 starVersion="pro"
 # --max number of files
-maxNFiles=75
+maxNFiles=20
 
 run_mode="$2"  # pass "embedding" or "data" from run.sh
 isEmbedding="true"

@@ -236,6 +236,7 @@ int StPicoHFJetMaker::MakeJets() {
   int refMult = mPicoDst->event()->refMult();
   double vz  = mPrimVtx.z();
 
+
   // -- Centrality via StRefMultCorr (isobar API)
   mRefmultCorrUtil->init(fRunNumber);
   mRefmultCorrUtil->initEvent((UShort_t)refMult, vz, mPicoDst->event()->ZDCx());

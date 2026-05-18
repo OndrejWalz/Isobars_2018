@@ -36,7 +36,8 @@ double areaMinForR(double R) {
   return CUT_AREA_04;
 }
 
-void make_hists_data(const char *infile  = "data_merged.root",
+void make_hists_data(const char *system = "Ru",
+                     const char *infile  = "data_merged.root",
                      const char *outfile = "hists_data.root")
 {
   TH1::SetDefaultSumw2(kTRUE);
@@ -44,8 +45,17 @@ void make_hists_data(const char *infile  = "data_merged.root",
   gROOT->SetBatch(kTRUE);
 
   // where to write PDFs
-  const char* pdfTop = "pdf";
-  gSystem->mkdir(pdfTop, kTRUE);
+  if (system != std::string("Ru") && system != std::string("Zr")) {
+    std::cerr << "Error: invalid system '" << system << "'. Expected 'Ru' or 'Zr'.\n";
+    return;
+  }
+  if (system == std::string("Ru")) {
+    const char* directory = "Ru+Ru";
+  } else {
+    const char* directory = "Zr+Zr";
+  }
+  
+  gSystem->mkdir(directory, kTRUE);
 
   TFile *fin = TFile::Open(infile, "READ");
   if (!fin || fin->IsZombie()) {
@@ -90,7 +100,7 @@ void make_hists_data(const char *infile  = "data_merged.root",
     if (!outR) outR = fout->GetDirectory(rname.c_str());
 
     // pdf dir for this R
-    TString pdfRDir; pdfRDir.Form("%s/%s", pdfTop, rname.c_str());
+    TString pdfRDir; pdfRDir.Form("%s/%s", directory, rname.c_str());
     gSystem->mkdir(pdfRDir.Data(), kTRUE);
 
     // Loop over centrality subdirs
@@ -171,6 +181,7 @@ void make_hists_data(const char *infile  = "data_merged.root",
           nbins_corr, xmin_corr, xmax_corr
         );
       }
+      double nJets[N_LEAD] = {0.0};  // weighted sum of jets per ptlead
 
       // ---------------- loop entries ----------------
       for (Long64_t i = 0; i < nentries; ++i) {
@@ -193,7 +204,16 @@ void make_hists_data(const char *infile  = "data_merged.root",
         for (int it = 0; it < N_LEAD; ++it) {
           if (reco_pt_lead >= (Float_t)PTLEAD_THR[it]) {
             hSpec[it]->Fill((double)reco_pt_corr, w);
+             nJets[it] += w;
           }
+        }
+        
+      }
+    
+      // ---------------- normalize ----------------
+      for (int it = 0; it < N_LEAD; ++it) {
+        if (nJets[it] > 0.0) {
+          hSpec[it]->Scale(1.0 / nJets[it], "width");  // normalize by weighted jet count and bin width
         }
       }
 
@@ -209,7 +229,7 @@ void make_hists_data(const char *infile  = "data_merged.root",
         // base draw
         hSpec[0]->SetTitle("");
         hSpec[0]->GetXaxis()->SetTitle("#it{p}_{T, reco}^{corr} (GeV/#it{c})");
-        hSpec[0]->GetYaxis()->SetTitle(HAS_CENT_WEIGHT ? "Weighted counts" : "Counts");
+        hSpec[0]->GetYaxis()->SetTitle(  HAS_CENT_WEIGHT ? "(1/N_{jets}) dN/dp_{T} (GeV/c)^{-1}": "(1/N_{jets}) dN/dp_{T} (GeV/c)^{-1}");
         hSpec[0]->GetXaxis()->SetRangeUser(-20, 60);
         hSpec[0]->Draw("E1");
 
@@ -264,7 +284,11 @@ void make_hists_data(const char *infile  = "data_merged.root",
         tex.SetTextSize(0.035);
 
         tex.DrawLatex(0.60, 0.60, line1.Data());
-        tex.DrawLatex(0.60, 0.555, "Au+Au  #sqrt{s_{NN}} = 200 GeV");
+        if (system == std::string("Ru")) {
+            tex.DrawLatex(0.60, 0.555, "Ru+Ru  #sqrt{s_{NN}} = 200 GeV");
+        } else {
+            tex.DrawLatex(0.60, 0.555, "Zr+Zr  #sqrt{s_{NN}} = 200 GeV");
+        }
         tex.DrawLatex(0.60, 0.51, "THIS THESIS");
 
         TString pdfName;
@@ -285,5 +309,5 @@ void make_hists_data(const char *infile  = "data_merged.root",
   fin->Close();
 
   std::cout << "Done. ROOT output: " << outfile << "\n";
-  std::cout << "PDFs written under: " << pdfTop << "/R*/CENT_*/\n";
+  std::cout << "PDFs written under: " << directory << "/R*/CENT_*/\n";
 }
