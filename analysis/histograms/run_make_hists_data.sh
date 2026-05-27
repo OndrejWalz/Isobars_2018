@@ -12,9 +12,15 @@ SYSTEM="${1:-Ru}"
 if [[ "$SYSTEM" == "Ru" ]]; then
  IN_BASENAME="${2:-data_merged_Ru.root}"
  OUT_BASENAME="${3:-hists_data_Ru.root}"
-else
+elif [[ "$SYSTEM" == "Zr" ]]; then
     IN_BASENAME="${2:-data_merged_Zr.root}"
     OUT_BASENAME="${3:-hists_data_Zr.root}"
+elif [[ "$SYSTEM" == "test" ]]; then
+    IN_BASENAME="../data/test_data.jetTree.root"
+    OUT_BASENAME="${3:-hists_data_test.root}"
+else
+    echo "Error: Unknown system '$SYSTEM'. Supported systems are: Ru, Zr, test."
+    exit 1
 fi
 
 

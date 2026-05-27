@@ -36,6 +36,8 @@ double areaMinForR(double R) {
   return CUT_AREA_04;
 }
 
+int normalize = 0;  // 0 = no norm, 1 = norm by jet count and bin width
+
 void make_hists_data(const char *system = "Ru",
                      const char *infile  = "data_merged.root",
                      const char *outfile = "hists_data.root")
@@ -45,16 +47,18 @@ void make_hists_data(const char *system = "Ru",
   gROOT->SetBatch(kTRUE);
 
   // where to write PDFs
-  if (system != std::string("Ru") && system != std::string("Zr")) {
-    std::cerr << "Error: invalid system '" << system << "'. Expected 'Ru' or 'Zr'.\n";
+  if (system != std::string("Ru") && system != std::string("Zr") && system != std::string("test")) {
+    std::cerr << "Error: invalid system '" << system << "'. Expected 'Ru', 'Zr', or 'test'.\n";
     return;
   }
   if (system == std::string("Ru")) {
     const char* directory = "Ru+Ru";
-  } else {
+  } else if (system == std::string("Zr")) {
     const char* directory = "Zr+Zr";
+  } else {
+    const char* directory = "test";
   }
-  
+
   gSystem->mkdir(directory, kTRUE);
 
   TFile *fin = TFile::Open(infile, "READ");
@@ -198,7 +202,7 @@ void make_hists_data(const char *system = "Ru",
         if (!(reco_neutral_fraction <= (Float_t)CUT_NEUTRAL_FRACTION)) continue;
 
         // trigger match
-        if (!(reco_trigger_match == kTRUE)) continue;
+        //if (!(reco_trigger_match == kTRUE)) continue; //remove this for MB
 
         // fill spectra per ptlead threshold
         for (int it = 0; it < N_LEAD; ++it) {
@@ -210,12 +214,14 @@ void make_hists_data(const char *system = "Ru",
         
       }
     
+      if (normalize) {
       // ---------------- normalize ----------------
       for (int it = 0; it < N_LEAD; ++it) {
         if (nJets[it] > 0.0) {
           hSpec[it]->Scale(1.0 / nJets[it], "width");  // normalize by weighted jet count and bin width
         }
       }
+    }
 
       // ---------------- write hists ----------------
       outC->cd();
@@ -228,8 +234,13 @@ void make_hists_data(const char *system = "Ru",
 
         // base draw
         hSpec[0]->SetTitle("");
+        hSpec[0]->GetYaxis()->SetTitleOffset(1.3); 
         hSpec[0]->GetXaxis()->SetTitle("#it{p}_{T, reco}^{corr} (GeV/#it{c})");
-        hSpec[0]->GetYaxis()->SetTitle(  HAS_CENT_WEIGHT ? "(1/N_{jets}) dN/dp_{T} (GeV/c)^{-1}": "(1/N_{jets}) dN/dp_{T} (GeV/c)^{-1}");
+        if (normalize) {
+          hSpec[0]->GetYaxis()->SetTitle(  HAS_CENT_WEIGHT ? "(1/N_{jets}) dN/dp_{T} (GeV/c)^{-1}": "(1/N_{jets}) dN/dp_{T} (GeV/c)^{-1}");
+        } else {
+          hSpec[0]->GetYaxis()->SetTitle(  HAS_CENT_WEIGHT ? "dN/dp_{T} (GeV/c)^{-1}": "dN/dp_{T} (GeV/c)^{-1}");
+        }
         hSpec[0]->GetXaxis()->SetRangeUser(-20, 60);
         hSpec[0]->Draw("E1");
 
@@ -254,10 +265,10 @@ void make_hists_data(const char *system = "Ru",
         hSpec[2]->Draw("E1 SAME");
         hSpec[3]->Draw("E1 SAME");
 
-        TLegend* leg = new TLegend(0.60, 0.68, 0.88, 0.88);
+        TLegend* leg = new TLegend(0.53, 0.68, 0.88, 0.88);
         leg->SetBorderSize(0);
         leg->SetFillStyle(0);
-        leg->SetTextSize(0.04);
+        leg->SetTextSize(0.035);
         for (int it=0; it<N_LEAD; ++it) {
           leg->AddEntry(hSpec[it],
                         Form("#it{p}_{T}^{lead} #geq %.0f GeV", PTLEAD_THR[it]),
@@ -281,15 +292,15 @@ void make_hists_data(const char *system = "Ru",
         TLatex tex;
         tex.SetNDC();
         tex.SetTextFont(42);
-        tex.SetTextSize(0.035);
+        tex.SetTextSize(0.028);
 
-        tex.DrawLatex(0.60, 0.60, line1.Data());
+        tex.DrawLatex(0.55, 0.64, line1.Data());
         if (system == std::string("Ru")) {
-            tex.DrawLatex(0.60, 0.555, "Ru+Ru  #sqrt{s_{NN}} = 200 GeV");
+            tex.DrawLatex(0.55, 0.60, "Ru+Ru (HT2)  #sqrt{s_{NN}} = 200 GeV" );
         } else {
-            tex.DrawLatex(0.60, 0.555, "Zr+Zr  #sqrt{s_{NN}} = 200 GeV");
+            tex.DrawLatex(0.55, 0.60, "Zr+Zr (HT2) #sqrt{s_{NN}} = 200 GeV");
         }
-        tex.DrawLatex(0.60, 0.51, "THIS THESIS");
+        tex.DrawLatex(0.55, 0.56, "THIS THESIS");
 
         TString pdfName;
         pdfName.Form("%s/spectra_ptlead_%s_%s.pdf", pdfCDir.Data(), rname.c_str(), cname.c_str());

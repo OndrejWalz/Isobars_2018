@@ -4,7 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # 1st arg: input ROOT file basename in ../../trees/ (or absolute path)
-IN_ARG="${1:-data_merged.root}"
+IN_ARG="${1:-data_merged_Zr_MB.root}"
+
 if [[ "$IN_ARG" = /* ]]; then
   INPUT="$IN_ARG"
 else

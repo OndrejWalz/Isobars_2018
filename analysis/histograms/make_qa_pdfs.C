@@ -75,12 +75,18 @@ static double AreaCutForR(const std::string& rname) {
 static void DrawVLineX(double xcut)
 {
   if (!gPad) return;
-  if (xcut <= 0) return;
+  if (xcut == 0) return;
 
-  gPad->Update(); // ensures ranges are computed
+  gPad->Update();
 
-  const double y1 = gPad->GetUymin();
-  const double y2 = gPad->GetUymax();
+  double y1, y2;
+  if (gPad->GetLogy()) {
+    y1 = TMath::Power(10, gPad->GetUymin());
+    y2 = TMath::Power(10, gPad->GetUymax());
+  } else {
+    y1 = gPad->GetUymin();
+    y2 = gPad->GetUymax();
+  }
 
   TLine* ln = new TLine(xcut, y1, xcut, y2);
   ln->SetLineColor(kRed);
@@ -149,10 +155,10 @@ static void DrawHeader(EHeaderCorner corner = kTopRight,
 
   if (centLabel.Length() > 0) {
     tx.DrawLatex(x, yTop,
-      Form("STAR Au+Au %s  #sqrt{#it{s}_{NN}} = 200 GeV", centLabel.Data()));
+      Form("STAR Zr+Zr %s  #sqrt{#it{s}_{NN}} = 200 GeV", centLabel.Data()));
   } else {
     tx.DrawLatex(x, yTop,
-      "STAR Au+Au  #sqrt{#it{s}_{NN}} = 200 GeV");
+      "STAR Zr+Zr  #sqrt{#it{s}_{NN}} = 200 GeV");
   }
 
   tx.SetTextSize(0.034);
@@ -224,9 +230,10 @@ static void Save1D(TH1* hist,
                    bool logY,
                    const char* drawOpt,
                    EHeaderCorner headerCorner,
-                   double vline_x = -1.0,
+                   double vline_x  = 0.0,
                    const TString& centLabel = "",
-                   int cw = 800, int ch = 600)
+                   int cw = 800, int ch = 600,
+                   double vline_x2 = 0.0)
 
 {
   if (!hist) return;
@@ -255,7 +262,7 @@ static void Save1D(TH1* hist,
   if (logY) {
     c.SetLogy();
     h->SetMarkerStyle(20);
-    h->SetMarkerSize(0.9);
+    h->SetMarkerSize(1.2);
     h->SetLineWidth(1);
   }
 
@@ -272,7 +279,10 @@ static void Save1D(TH1* hist,
   h->Draw(opt.Data());
 
   c.Update();                  // important on log pads
-  if (vline_x > 0) DrawVLineX(vline_x);
+  
+  if (vline_x  != 0) DrawVLineX(vline_x);
+  if (vline_x2 != 0) DrawVLineX(vline_x2);
+
   DrawHeader(headerCorner, centLabel);
 
   c.SaveAs(outPdf.Data());
@@ -360,10 +370,14 @@ void make_qa_pdfs(const char *infile = "data_merged.root")
       TH1* hDca     = (TH1*)qaList->FindObject("hTrackDca");
       TH1* hEvt0    = (TH1*)qaList->FindObject("hEventStat0");
       TH1* hEvt1    = (TH1*)qaList->FindObject("hEventStat1");
+      TH1* hdeltaz_acc = (TH1*)qaList->FindObject("hdeltaz_acc");
+      TH1* hdeltaz = (TH1*)qaList->FindObject("hdeltaz");
 
       TH2* hTowEtaPhi   = (TH2*)qaList->FindObject("hTowEtaPhi");
       TH2* hTrackEtaPhi = (TH2*)qaList->FindObject("hTrackEtaPhi");
       TH2* hRhoVsRefMult = (TH2*)qaList->FindObject("hRhoVsRefMult");
+      TH2* hRefMultVsbTofMatch = (TH2*)qaList->FindObject("hRefMultVsbTofMatch");
+      TH2* hRefMultVsbTofMatch_ACC = (TH2*)qaList->FindObject("hRefMultVsbTofMatch_ACC");
 
       // --- Requested axis labels ---
       if (hcent9) Save1D(hcent9, "pdf/QA/hcent9.pdf",
@@ -381,15 +395,30 @@ void make_qa_pdfs(const char *infile = "data_merged.root")
                            "#it{p}_{T}^{track} (GeV/#it{c})", "Weighted counts", true, "E1", kTopRight);
       if (hTowE)    Save1D(hTowE, "pdf/QA/hTowE.pdf",
                            "#it{E}_{T} (GeV)", "Weighted counts", true, "E1", kTopRight);
-      if (hDca)     Save1D(hDca, "pdf/QA/hTrackDca.pdf",
-                           "DCA (cm)", "Counts", true, "E1", kTopRight);
+      if (hDca) Save1D(hDca, "pdf/QA/hTrackDca.pdf",
+                 "DCA (cm)", "Counts", true, "E1", kTopRight,
+                 1.0);
+      if (hdeltaz_acc) Save1D(hdeltaz_acc, "pdf/QA/hdeltaz_acc.pdf",
+                                 "#it{V}_{z,TPC} - #it{V}_{z,VPD} (cm)", "Counts", false, "HIST", kTopRight);
+      if (hdeltaz) Save1D(hdeltaz, "pdf/QA/hdeltaz.pdf",
+                           "#it{V}_{z,TPC} - #it{V}_{z,VPD} (cm)", "Counts", false, "HIST", kTopRight,
+                           3.0, "", 800, 600, -3.0);
+
 
       if (hTowEtaPhi)   Save2D(hTowEtaPhi,   "pdf/QA/hTowEtaPhi.pdf",   "#eta_{tow} (-)", "#varphi_{tow} (rad)", true, kTopRight);
       if (hTrackEtaPhi) Save2D(hTrackEtaPhi, "pdf/QA/hTrackEtaPhi.pdf", "#eta_{trk} (-)", "#varphi_{trk} (rad)", true, kTopRight);
       if (hRhoVsRefMult) {
         Save2D(hRhoVsRefMult, "pdf/QA/hRhoVsRefMult.pdf",
                "refMult", "#rho (GeV/#it{c} per unit area)", true, kTopRight);
+        }
+      if(hRefMultVsbTofMatch) {
+        Save2D(hRefMultVsbTofMatch, "pdf/QA/hRefMultVsbTofMatch.pdf",
+               "bTofMatch", "refMult", true, kTopRight);
       }
+      if(hRefMultVsbTofMatch_ACC) {
+        Save2D(hRefMultVsbTofMatch_ACC, "pdf/QA/hRefMultVsbTofMatch_ACC.pdf",
+               "bTofMatch", "refMult", true, kTopRight);
+        }
     }
   }
 

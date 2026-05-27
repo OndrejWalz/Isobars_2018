@@ -79,15 +79,15 @@ int StPicoHFJetMaker::InitJets() {
   TAxis* ax = hcent9->GetXaxis();
   const char* lab9[10] = {
     "undef (-1)",
-    "0: 0-5%",
-    "1: 5-10%",
-    "2: 10-20%",
-    "3: 20-30%",
+    "0: 70-80%",
+    "1: 60-70%",
+    "2: 50-60%",
+    "3: 40-50%",
     "4: 30-40%",
-    "5: 40-50%",
-    "6: 50-60%",
-    "7: 60-70%",
-    "8: 70-80%"
+    "5: 20-30%",
+    "6: 10-20%",
+    "7: 5-10%",
+    "8: 0-5%"
   };
   int b;
   for (b = 1; b <= 10; ++b) ax->SetBinLabel(b, lab9[b-1]);
@@ -103,7 +103,21 @@ int StPicoHFJetMaker::InitJets() {
                        "#rho vs refMult;refMult;#rho (GeV/c per unit area)",
                        800, 0, 800,     // adjust refMult range/binning to your dataset
                        200, 0.0, 200.0  // adjust rho range/binning as needed
-                       ));                     
+                       )); 
+  mOutList->Add(new TH2D("hRefMultVsbTofMatch",
+                       "refMult vs TofMatch",
+                       700, 0, 700,     // adjust refMult range
+                        700, 0, 700      // adjust nTofMatch range 
+                       ));
+
+  mOutList->Add(new TH2D("hRefMultVsbTofMatch_ACC",
+                       "refMult vs TofMatch (after cut)",
+                       700, 0, 700,
+                       700, 0, 700));
+  
+  mOutList->Add(new TH1D("hRefMultCorr", "Corrected refMult;refMultCorr;counts", 800, 0, 800));
+
+  mOutList->Add(new TH1D("hRefMultCorr_ACC", "Corrected refMult;refMultCorr;counts", 800, 0, 800));
 
 
   TDirectory* fileDir = gDirectory;
@@ -217,47 +231,59 @@ int StPicoHFJetMaker::MakeJets() {
   vector<fastjet::PseudoJet> fullTracks;
   vector<fastjet::PseudoJet> MCjetTracks;
 
-  // fRunNumber = mPicoDst->event()->runId();
-  // fEventId = mPicoDst->event()->eventId(); // eventID
-  // int refMult = mPicoDst->event()->grefMult();
-  // double vz = mPrimVtx.z();
 
-  //         StRefMultCorr mRefMultCorrUtil( "refmult", "Isobar");
-  //       mRefMultCorrUtil.init( picoEvent->runId() );
-  //       mRefMultCorrUtil.initEvent( picoEvent->refMult(), picoEvent->primaryVertex().Z(), picoEvent->ZDCx() );
-  //       Float_t refMultCorr = mRefMultCorrUtil.getRefMultCorr();
-  // //mRefmultCorrUtil->setEvent(fRunNumber, refMult, mPicoDst->event()->ZDCx(),
-  // //                           vz);
-  // fCentrality = mRefmultCorrUtil->centrality9(); // 0 = 0-5 %,..., 8 = 70-80
-  //                                                // %
 
   fRunNumber = mPicoDst->event()->runId();
   fEventId   = mPicoDst->event()->eventId();
   int refMult = mPicoDst->event()->refMult();
   double vz  = mPrimVtx.z();
-
+  double refMultCorr = mRefmultCorrUtil->getRefMultCorr();
 
   // -- Centrality via StRefMultCorr (isobar API)
   mRefmultCorrUtil->init(fRunNumber);
+
+  if (mRefmultCorrUtil->isBadRun(fRunNumber)) return kStOK;
+
+  TH2D* hRefMultVsbTofMatch = (TH2D*)mOutList->FindObject("hRefMultVsbTofMatch");
+  if (hRefMultVsbTofMatch)
+    hRefMultVsbTofMatch->Fill(mPicoDst->event()->nBTOFMatch(), refMult);
+
+  TH1D* hRefMultCorr = (TH1D*)mOutList->FindObject("hRefMultCorr");
+  if (hRefMultCorr) hRefMultCorr->Fill(refMultCorr);
+
+  if (!mRefmultCorrUtil->passnTofMatchRefmultCut(refMult, mPicoDst->event()->nBTOFMatch())) return kStOK;
+
+  TH2D* hRefMultVsbTofMatchAfter = (TH2D*)mOutList->FindObject("hRefMultVsbTofMatch_ACC");
+  if (hRefMultVsbTofMatchAfter)
+    hRefMultVsbTofMatchAfter->Fill(mPicoDst->event()->nBTOFMatch(), refMult);
+
+  TH1D* hRefMultCorrAcc = (TH1D*)mOutList->FindObject("hRefMultCorr_ACC");
+  if (hRefMultCorrAcc) hRefMultCorrAcc->Fill(refMultCorr);
   mRefmultCorrUtil->initEvent((UShort_t)refMult, vz, mPicoDst->event()->ZDCx());
 
-  double refMultCorr = mRefmultCorrUtil->getRefMultCorr();
+  if (mRefmultCorrUtil->getCentralityBin9() < 0) return kStOK;
+
+  fCentrality = mRefmultCorrUtil->getCentralityBin9(); // 8 = 0-5 %,..., 0= 70-80 %
+
+  
   fCentralityWeight  = mRefmultCorrUtil->getWeight();  
 
   // -- Centrality bin from Table 1 (Ru boundaries)
-  if      (refMultCorr > 216) fCentrality = 0;
-  else if (refMultCorr > 151) fCentrality = 1;
-  else if (refMultCorr > 103) fCentrality = 2;
-  else if (refMultCorr >  69) fCentrality = 3;
-  else if (refMultCorr >  44) fCentrality = 4;
-  else if (refMultCorr >  26) fCentrality = 5;
-  else if (refMultCorr >  15) fCentrality = 6;
-  else if (refMultCorr >   8) fCentrality = 7;
-  else                        fCentrality = -1;
+  // if      (refMultCorr > 216) fCentrality = 0;
+  // else if (refMultCorr > 151) fCentrality = 1;
+  // else if (refMultCorr > 103) fCentrality = 2;
+  // else if (refMultCorr >  69) fCentrality = 3;
+  // else if (refMultCorr >  44) fCentrality = 4;
+  // else if (refMultCorr >  26) fCentrality = 5;
+  // else if (refMultCorr >  15) fCentrality = 6;
+  // else if (refMultCorr >   8) fCentrality = 7;
+  // else                        fCentrality = -1;
 
-  if (fCentrality == -1) return kStOK;  
+  // if (fCentrality == -1) return kStOK;  
+  if (fCentrality < 0 || fCentrality > 8) return kStOK;
 
   if (hcent9) hcent9->Fill(fCentrality, fCentralityWeight);
+
 
   TH1D* hTowE = (TH1D*)mOutList->FindObject("hTowE");
   TH2D* hTowEtaPhi = (TH2D*)mOutList->FindObject("hTowEtaPhi");
@@ -266,9 +292,9 @@ int StPicoHFJetMaker::MakeJets() {
 
   // map to 3 classes: 1=0-10%, 2=20-40%, 3=60-80%, else 0 (=skip)
   int c3 = 0;
-  if (fCentrality == 0 || fCentrality == 1)       c3 = 1; // 0-10%
-  else if (fCentrality == 3 || fCentrality == 4)  c3 = 2; // 20-40%
-  else if (fCentrality == 7 || fCentrality == 8)  c3 = 3; // 60-80%
+  if (fCentrality == 0 || fCentrality == 1)       c3 = 3; // 60-80%
+  else if (fCentrality == 4 || fCentrality == 5)  c3 = 2; // 20-40%
+  else if (fCentrality == 7 || fCentrality == 8)  c3 = 1; // 0-10%
   if (c3 == 0) {
   return kStOK;
   }

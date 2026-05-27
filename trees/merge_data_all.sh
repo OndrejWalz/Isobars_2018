@@ -46,6 +46,7 @@ if [[ -z "$latest_run" ]]; then
 fi
 
 DEFAULT_BASE="${SUBMIT_DIR}/${latest_run}"
+#DEFAULT_BASE="${SUBMIT_DIR}/2026-05-24"
 DEFAULT_OUT_DIR="${SCRIPT_DIR}"
 
 ########################
@@ -54,13 +55,13 @@ DEFAULT_OUT_DIR="${SCRIPT_DIR}"
 
 BASE="${1:-$DEFAULT_BASE}"
 OUT_DIR="${2:-$DEFAULT_OUT_DIR}"
-OUT_NAME="${3:-data_merged_Zr.root}"
+OUT_NAME="${3:-data_merged_Ru.root}"
 
 MIN_SIZE="${MIN_SIZE:-5000}"
-BATCH="${BATCH:-200}"
+BATCH="${BATCH:-100}"
 CLEAN_SHARDS="${CLEAN_SHARDS:-1}"
 
-PROD_DIR="$BASE/job_zr_2018_test/production"
+PROD_DIR="$BASE/job_ru_2018/production"
 
 mkdir -p "$OUT_DIR"
 
@@ -74,7 +75,7 @@ FINAL="$OUT_DIR/$OUT_NAME"
 LIST="$OUT_DIR/inlist_data.txt"
 : > "$LIST"
 
-log "Merging DATA files from job_zr_2018_test"
+log "Merging DATA files from job_ru_2018"
 log "  BASE        : $BASE"
 log "  PROD_DIR    : $PROD_DIR"
 log "  OUT_DIR     : $OUT_DIR"
