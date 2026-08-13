@@ -4,13 +4,13 @@ ClassImp(StPicoJetMaker)
 
     // _________________________________________________________
     // _________________________________________________________
-    StPicoJetMaker::StPicoJetMaker(TString name, StPicoDstMaker *picoMaker,
-                                   TString outputBaseFileName)
-    : StMaker(name), mPicoDst(NULL), mBField(0.), mOutList(NULL),
-      mMakerMode(StPicoJetMaker::kAnalyze), mMcMode(false),
+StPicoJetMaker::StPicoJetMaker(TString name, StPicoDstMaker *picoMaker,
+                               TString outputBaseFileName)
+    : StMaker(name), mPicoDst(NULL), mPicoCuts(NULL), mBField(0.), mOutList(NULL),
+      mTree(NULL), mMakerMode(StPicoJetMaker::kAnalyze), mMcMode(false),
       mOutputTreeName("picoHFtree"), mOutputFileBaseName(outputBaseFileName),
-      mPicoDstMaker(picoMaker), mPicoEvent(NULL), mTree(NULL),
-      mOutputFileTree(NULL), mOutputFileList(NULL) {
+      mPicoDstMaker(picoMaker), mPicoEvent(NULL),
+      mOutputFileTree(NULL), mOutputFileList(NULL){
   // -- constructor
 }
 
@@ -142,7 +142,7 @@ Int_t StPicoJetMaker::Make() {
     if (mMakerMode == StPicoJetMaker::kWrite ||
         mMakerMode == StPicoJetMaker::kAnalyze) {
         TH1D* hDca = (TH1D*)mOutList->FindObject("hTrackDca");
-        TH1I* hNHits = (TH1I*)mOutList->FindObject("hTrackNHitsFit");
+        TH1D* hNHits = (TH1D*)mOutList->FindObject("hTrackNHitsFit");
 
         for (unsigned short iTrack = 0; iTrack < nTracks; ++iTrack) {
           StPicoTrack *trk = mPicoDst->track(iTrack);
@@ -288,7 +288,7 @@ void StPicoJetMaker::initializeEventStats() {
   mOutList->Add(new TH1I("hrunId_acc", "accepted events runId", 90913, 15076101,
                          15167014)); // 15076101−15167014
   mOutList->Add(new TH1D("hTrackDca", "Tracks DCA (to PV);DCA (cm);counts", 400, 0.0, 5.0));
-  mOutList->Add(new TH1I("hTrackNHitsFit", "Tracks nHitsFit;nHitsFit;counts", 50, 0, 50));
+  mOutList->Add(new TH1D("hTrackNHitsFit", "Tracks nHitsFit;nHitsFit;counts", 50, 0, 50));
 
 }
 

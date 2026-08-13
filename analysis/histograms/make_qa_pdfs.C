@@ -5,7 +5,15 @@
 //   (a) 1D area histograms
 //   (b) 2D reco_pt_corr vs reco_area histograms
 //
-// NOTE: This does NOT apply the cut. It only draws the line.
+// NOTE (NEF change): hNEF is still produced per (R, centrality) exactly as
+// before. In addition, at the end of the run, the three R-histograms for a
+// given centrality are combined into a single overlay plot (three labeled,
+// differently-colored curves + a legend, NOT summed into one curve).
+//
+// NOTE (centrality shading): hRefMultCorr now gets shaded regions for the
+// 0-10% and 60-80% centrality classes, per the calibration table. The boundaries
+// differ slightly between Zr+Zr and Ru+Ru, so the correct column is picked
+// automatically (or can be forced) via the new `species` argument.
 
 #include "TFile.h"
 #include "TDirectoryFile.h"
@@ -25,11 +33,17 @@
 #include "TColor.h"
 #include "TLegend.h"
 #include "TLine.h"
+#include "TMath.h"
 
 #include <iostream>
 #include <string>
 #include <vector>
-#include <map>
+#include <utility>
+#include <cstring>
+#include <iterator>
+#include <cmath>
+
+using namespace std;
 
 // Convert directory name -> human label for header.
 // Return "" if not recognized.
@@ -43,11 +57,38 @@ static TString CentralityLabelFromDir(const std::string& cname)
 
 // -------------------- cuts (VISUAL ONLY) --------------------
 const double RECO_DUMMY_CUT = -500.0;
+const double pt_reco_corr_cut = 15.0;
 
 // Jet-area cut lines (draw only; do not apply)
 const double CUT_AREA_02 = 0.07;  // R = 0.2
 const double CUT_AREA_03 = 0.20;  // R = 0.3
 const double CUT_AREA_04 = 0.40;  // R = 0.4
+
+// -------------------- centrality class boundaries (refMultCorr >) --------------------
+struct CentRegion {
+  double min;
+  double max;
+  const char* label;
+  Color_t fillColor;
+  Color_t textColor;
+};
+
+// 60-80% is bounded by the 80% threshold (7.0/8.0) and the 60% threshold (25.0/26.0)
+static const CentRegion kCentRegionsZr[] = {
+  {213.0, 9999.0, "0-10%",  kRed-9,   kRed+2},
+  {7.0,   25.0,   "60-80%", kAzure-9, kBlue+2}
+};
+
+static const CentRegion kCentRegionsRu[] = {
+  {216.0, 9999.0, "0-10%",  kRed-9,   kRed+2},
+  {8.0,   26.0,   "60-80%", kAzure-9, kBlue+2}
+};
+
+static const int kNumCentRegions = 2;
+
+// Set at runtime in make_qa_pdfs() based on the chosen/detected species.
+// Used by DrawHeader()/DrawHeaderSplit() instead of a hardcoded string.
+static TString gSpeciesLabel = "Zr+Zr  (MB)";
 
 // -------------------- utils --------------------
 static TString SafeName(const char* name) {
@@ -71,7 +112,6 @@ static double AreaCutForR(const std::string& rname) {
 }
 
 // Draw a vertical red dashed line at x = xcut spanning current pad y-range.
-// ROOT5/CINT-safe pattern: allocate on heap and do not delete.
 static void DrawVLineX(double xcut)
 {
   if (!gPad) return;
@@ -81,8 +121,8 @@ static void DrawVLineX(double xcut)
 
   double y1, y2;
   if (gPad->GetLogy()) {
-    y1 = TMath::Power(10, gPad->GetUymin());
-    y2 = TMath::Power(10, gPad->GetUymax());
+    y1 = pow(10.0, gPad->GetUymin());
+    y2 = pow(10.0, gPad->GetUymax());
   } else {
     y1 = gPad->GetUymin();
     y2 = gPad->GetUymax();
@@ -93,6 +133,86 @@ static void DrawVLineX(double xcut)
   ln->SetLineWidth(3);
   ln->SetLineStyle(2);
   ln->Draw("SAME");
+}
+
+// Shades the area under the histogram for specific centrality regions
+static void DrawCentralityRegions(TH1* hMain, const CentRegion* regions, int nRegions, const TString& drawOpt)
+{
+  if (!gPad || !hMain || !regions || nRegions <= 0) return;
+
+  gPad->Update();
+  double y2 = gPad->GetLogy() ? pow(10.0, gPad->GetUymax()) : gPad->GetUymax();
+
+  TLatex lx;
+  lx.SetTextFont(42);
+  lx.SetTextSize(0.035);
+  lx.SetTextAlign(22); // center horizontally & vertically
+
+  for (int i = 0; i < nRegions; ++i) {
+    // Clone to make a shaded copy for just this region
+    TH1* hShade = (TH1*)hMain->Clone(Form("%s_shade_%d", hMain->GetName(), i));
+    
+    for (int b = 1; b <= hShade->GetNbinsX(); ++b) {
+      double xC = hShade->GetXaxis()->GetBinCenter(b);
+      // Zero out bins outside this region
+      if (xC < regions[i].min || xC >= regions[i].max) {
+        hShade->SetBinContent(b, 0);
+        hShade->SetBinError(b, 0);
+      }
+    }
+    
+    hShade->SetFillColor(regions[i].fillColor);
+    hShade->SetFillStyle(1001); // solid fill
+    hShade->SetLineColor(regions[i].fillColor); // hide outline
+    hShade->SetLineWidth(1);
+    hShade->Draw("HIST SAME"); // Draw shading
+
+    // Draw label above the shaded region
+              // Draw label above the shaded region
+      double xLabel;
+      if (regions[i].max > 1000) {
+        xLabel = regions[i].min + 60.0;
+      } else {
+        // Shift 60-80% more to the right (closer to max, or add a fixed offset)
+        if (TString(regions[i].label).Contains("60-80")) {
+          xLabel = regions[i].max + 45.0; // Pushes it near the right edge of the 60-80% band
+        } else {
+          xLabel = (regions[i].min + regions[i].max) / 2.0;
+        }
+      }
+    double yLabel = gPad->GetLogy() ? y2 * 0.15 : y2 * 0.85;
+
+
+    lx.SetTextColor(regions[i].textColor);
+    lx.DrawLatex(xLabel, yLabel, regions[i].label);
+  }
+
+  // Redraw the main histogram outline/points so they stay strictly ON TOP of the new shading
+  hMain->Draw(Form("%s SAME", drawOpt.Data()));
+}
+
+// Draws explicit small vertical tick marks at every bin edge (and the rightmost edge)
+static void DrawBinEdgeTicks(TH1* h)
+{
+  if (!gPad || !h) return;
+  gPad->Update();
+
+  TAxis* axis = h->GetXaxis();
+  double y0 = gPad->GetUymin();
+  double yMax = gPad->GetUymax();
+  
+  // Calculate a clear tick height (2% of axis span)
+  double tickHeight = gPad->GetLogy() ? (yMax / y0) * 0.02 : (yMax - y0) * 0.02;
+  double y1 = gPad->GetLogy() ? y0 * 1.05 : y0 + tickHeight;
+
+  // Loop through all bin lower edges, plus the final upper edge
+  for (int i = 1; i <= h->GetNbinsX() + 1; ++i) {
+    double xEdge = axis->GetBinLowEdge(i);
+    TLine* tick = new TLine(xEdge, y0, xEdge, y1);
+    tick->SetLineColor(kBlack);
+    tick->SetLineWidth(1);
+    tick->Draw("SAME");
+  }
 }
 
 // -------------------- palette (push to yellow/green, avoid red) --------------------
@@ -155,10 +275,10 @@ static void DrawHeader(EHeaderCorner corner = kTopRight,
 
   if (centLabel.Length() > 0) {
     tx.DrawLatex(x, yTop,
-      Form("STAR Zr+Zr %s  #sqrt{#it{s}_{NN}} = 200 GeV", centLabel.Data()));
+      Form(" %s %s  #sqrt{#it{s}_{NN}} = 200 GeV", gSpeciesLabel.Data(), centLabel.Data()));
   } else {
     tx.DrawLatex(x, yTop,
-      "STAR Zr+Zr  #sqrt{#it{s}_{NN}} = 200 GeV");
+      Form(" %s  #sqrt{#it{s}_{NN}} = 200 GeV", gSpeciesLabel.Data()));
   }
 
   tx.SetTextSize(0.034);
@@ -170,7 +290,6 @@ static void ApplyAxisStyle1D(TH1* h)
 {
   if (!h) return;
 
-  // modest increase vs ROOT defaults
   const double lab = 0.045;  // label size
   const double tit = 0.050;  // title size
 
@@ -221,7 +340,6 @@ static double SmallestPositiveBin(TH1* h)
   return minPos;
 }
 
-
 // -------------------- saving helpers --------------------
 static void Save1D(TH1* hist,
                    const TString& outPdf,
@@ -233,8 +351,11 @@ static void Save1D(TH1* hist,
                    double vline_x  = 0.0,
                    const TString& centLabel = "",
                    int cw = 800, int ch = 600,
-                   double vline_x2 = 0.0)
-
+                   double vline_x2 = 0.0,
+                   const CentRegion* centRegions = 0,
+                   int nCentRegions = 0,
+                   bool drawEdgeTicks = false,
+                   bool hideAxisTicks = false)
 {
   if (!hist) return;
 
@@ -250,11 +371,10 @@ static void Save1D(TH1* hist,
 
   TCanvas c(Form("c_%s", h->GetName()), "", cw, ch);
 
-  // increased margins to accommodate larger labels/titles
   c.SetLeftMargin(0.15);
   c.SetBottomMargin(0.15);
   c.SetTopMargin(0.06);
-  c.SetRightMargin(0.05);
+  c.SetRightMargin(0.02);
 
   c.SetTickx(0);
   c.SetTicky(0);
@@ -268,20 +388,26 @@ static void Save1D(TH1* hist,
 
   if (logY) {
     const double minPos = SmallestPositiveBin(h);
-    if (minPos > 0) h->SetMinimum(0.5 * minPos);  // or 0.8*minPos
+    if (minPos > 0) h->SetMinimum(0.5 * minPos);
+  }
+
+  if (hideAxisTicks && h->GetXaxis()) {
+    h->GetXaxis()->SetTickLength(0); 
   }
 
   TString opt = (drawOpt && drawOpt[0]) ? drawOpt : "E1";
   if (logY && opt.Contains("E")) {
-    // E0 = no end-caps; add P so you see points, not just bars
     opt = "E0 P";
   }
   h->Draw(opt.Data());
 
-  c.Update();                  // important on log pads
-  
+  c.Update();
+
   if (vline_x  != 0) DrawVLineX(vline_x);
   if (vline_x2 != 0) DrawVLineX(vline_x2);
+  
+  if (centRegions && nCentRegions > 0) DrawCentralityRegions(h, centRegions, nCentRegions, opt);
+  if (drawEdgeTicks) DrawBinEdgeTicks(h);
 
   DrawHeader(headerCorner, centLabel);
 
@@ -298,7 +424,6 @@ static void Save2D(TH2* hist,
                    double vline_x = -1.0,
                    const TString& centLabel = "",
                    int cw = 800, int ch = 600)
-
 {
   if (!hist) return;
 
@@ -316,11 +441,10 @@ static void Save2D(TH2* hist,
 
   TCanvas c(Form("c_%s", h->GetName()), "", cw, ch);
 
-  // increased left/bottom; keep right larger for colorbar
   c.SetLeftMargin(0.15);
   c.SetBottomMargin(0.15);
   c.SetTopMargin(0.06);
-  c.SetRightMargin(0.16); // colorbar
+  c.SetRightMargin(0.16);
 
   c.SetTickx(0);
   c.SetTicky(0);
@@ -336,10 +460,141 @@ static void Save2D(TH2* hist,
   delete h;
 }
 
-// -------------------- main --------------------
-void make_qa_pdfs(const char *infile = "data_merged.root")
+static void DrawHeaderSplit(const TString& centLabel = "")
+{
+  if (!gPad) return;
+
+  const double yTop = 1.0 - gPad->GetTopMargin() - 0.02;
+  const double dy   = 0.055;
+
+  TLatex txL;
+  txL.SetNDC();
+  txL.SetTextFont(42);
+  txL.SetTextAlign(13);
+  txL.SetTextSize(0.045);
+  txL.DrawLatex(gPad->GetLeftMargin() + 0.02, yTop, "THIS THESIS");
+
+  const double xR = 1.0 - gPad->GetRightMargin() - 0.02;
+  TLatex txR;
+  txR.SetNDC();
+  txR.SetTextFont(42);
+  txR.SetTextAlign(33);
+  txR.SetTextSize(0.040);
+
+  if (centLabel.Length() > 0) {
+    txR.DrawLatex(xR, yTop, Form("%s %s", gSpeciesLabel.Data(), centLabel.Data()));
+  } else {
+    txR.DrawLatex(xR, yTop, gSpeciesLabel.Data());
+  }
+  txR.DrawLatex(xR, yTop - dy, "#sqrt{#it{s}_{NN}} = 200 GeV");
+}
+
+static void NEFStyleForR(const std::string& rname,
+                         Color_t& color, Style_t& marker, TString& label)
+{
+  if (rname == "R0.2") {
+    color = kRed;   marker = 20; label = "R = 0.2";
+  } else if (rname == "R0.3") {
+    color = kBlue;  marker = 21; label = "R = 0.3";
+  } else if (rname == "R0.4") {
+    color = kBlack; marker = 22; label = "R = 0.4";
+  } else {
+    color = kGray+2; marker = 24; label = rname.c_str();
+  }
+}
+
+static void SaveNEFOverlay(TList* hists,
+                           const TString& outPdf,
+                           const TString& centLabel = "",
+                           int cw = 800, int ch = 600)
+{
+  if (!hists || hists->GetSize() == 0) return;
+
+  TCanvas c("c_hNEF_overlay", "", cw, ch);
+  c.SetLeftMargin(0.15);
+  c.SetBottomMargin(0.15);
+  c.SetTopMargin(0.06);
+  c.SetRightMargin(0.05);
+  c.SetTickx(0);
+  c.SetTicky(0);
+  c.SetLogy();
+
+  TLegend* leg = new TLegend(0.65, 0.2, 0.9, 0.40);
+  leg->SetHeader("anti-#it{k}_{T}, Full jets");
+  leg->SetBorderSize(0);
+  leg->SetFillStyle(0);
+  leg->SetTextSize(0.038);
+
+  TObjArray clones;
+  clones.SetOwner(kFALSE);
+
+  TIter it(hists);
+  TH1* horig = 0;
+
+  while ((horig = (TH1*)it())) {
+    std::string rname = horig->GetTitle();
+
+    Color_t col;
+    Style_t mk;
+    TString label;
+    NEFStyleForR(rname, col, mk, label);
+
+    TH1* h = (TH1*)horig->Clone(Form("%s_ov", horig->GetName()));
+    h->SetDirectory(0);
+    h->SetTitle("");
+    h->GetXaxis()->SetTitle("NEF (-)");
+    h->GetYaxis()->SetTitle("Probability (a.u.)");
+    ApplyAxisStyle1D(h);
+
+    h->SetMarkerColor(col);
+    h->SetLineColor(col);
+    h->SetMarkerStyle(mk);
+    h->SetMarkerSize(1.1);
+    h->SetLineWidth(1);
+
+    h->SetMinimum(1e-7);
+    h->SetMaximum(1.0);
+
+    leg->AddEntry(h, label.Data(), "P");
+    clones.Add(h);
+  }
+
+  if (clones.GetEntriesFast() == 0) { delete leg; return; }
+
+  for (int i = 0; i < clones.GetEntriesFast(); ++i) {
+    TH1* h = (TH1*)clones.At(i);
+    TString drawOpt = (i == 0) ? "P" : "P SAME";
+    h->Draw(drawOpt.Data());
+  }
+
+  c.Update();
+  DrawHeaderSplit(centLabel);
+  leg->Draw();
+
+  c.SaveAs(outPdf.Data());
+
+  for (int i = 0; i < clones.GetEntriesFast(); ++i) delete clones.At(i);
+  delete leg;
+}
+
+void make_qa_pdfs(const char *infile = "data_merged.root", const char* species = 0)
 {
   BasicStyle();
+
+  TString spec = species ? TString(species) : TString();
+  if (spec.IsNull()) {
+    TString fn(infile);
+    if (fn.Contains("Ru", TString::kIgnoreCase))      spec = "Ru";
+    else if (fn.Contains("Zr", TString::kIgnoreCase)) spec = "Zr";
+    else                                               spec = "Zr";
+  }
+  TString specUp = spec; specUp.ToUpper();
+  spec = (specUp == "RU") ? "Ru" : "Zr";
+
+  gSpeciesLabel = Form("%s+%s  (MB)", spec.Data(), spec.Data());
+  const CentRegion* centRegionsRefMult = (spec == "Ru") ? kCentRegionsRu : kCentRegionsZr;
+
+  std::cout << "Species: " << spec << "  (header: " << gSpeciesLabel << ")\n";
 
   gSystem->mkdir("pdf/QA", kTRUE);
   gSystem->mkdir("pdf/Jets", kTRUE);
@@ -352,9 +607,6 @@ void make_qa_pdfs(const char *infile = "data_merged.root")
 
   std::cout << "Input : " << infile << "\n";
 
-  // ============================================================
-  // 1) QA histograms (TList named "QA_histograms")
-  // ============================================================
   {
     TObject* qaObj = fin->Get("QA_histograms");
     TList* qaList = qaObj ? dynamic_cast<TList*>(qaObj) : 0;
@@ -372,6 +624,7 @@ void make_qa_pdfs(const char *infile = "data_merged.root")
       TH1* hEvt1    = (TH1*)qaList->FindObject("hEventStat1");
       TH1* hdeltaz_acc = (TH1*)qaList->FindObject("hdeltaz_acc");
       TH1* hdeltaz = (TH1*)qaList->FindObject("hdeltaz");
+      TH1* hRefMultCorr = (TH1*)qaList->FindObject("hRefMultCorr");
 
       TH2* hTowEtaPhi   = (TH2*)qaList->FindObject("hTowEtaPhi");
       TH2* hTrackEtaPhi = (TH2*)qaList->FindObject("hTrackEtaPhi");
@@ -379,18 +632,16 @@ void make_qa_pdfs(const char *infile = "data_merged.root")
       TH2* hRefMultVsbTofMatch = (TH2*)qaList->FindObject("hRefMultVsbTofMatch");
       TH2* hRefMultVsbTofMatch_ACC = (TH2*)qaList->FindObject("hRefMultVsbTofMatch_ACC");
 
-      // --- Requested axis labels ---
       if (hcent9) Save1D(hcent9, "pdf/QA/hcent9.pdf",
                          "Centrality", "Counts", false, "HIST", kTopRight);
 
-      // EventStat: add y-axis label = Counts (x left empty by request)
       if (hEvt0)  Save1D(hEvt0,  "pdf/QA/hEventStat0.pdf",
-                         "", "Counts", false, "HIST", kTopRight);
-      if (hEvt1)  Save1D(hEvt1,  "pdf/QA/hEventStat1.pdf",
-                         "", "Counts", false, "HIST", kTopRight);
+                         "", "Counts", false, "HIST", kTopRight, 
+                         0.0, "", 800, 600, 0.0, 0, 0, true, true);
 
-      if (hzvertex) Save1D(hzvertex, "pdf/QA/hzvertex.pdf",
-                           "#it{v}_{z} (cm)", "Weighted counts", false, "E1", kTopRight);
+      if (hEvt1)  Save1D(hEvt1,  "pdf/QA/hEventStat1.pdf",
+                         "", "Counts", false, "HIST", kTopRight,
+                         0.0, "", 800, 600, 0.0, 0, 0, true, true);
       if (hTrackPt) Save1D(hTrackPt, "pdf/QA/hTrackPt.pdf",
                            "#it{p}_{T}^{track} (GeV/#it{c})", "Weighted counts", true, "E1", kTopRight);
       if (hTowE)    Save1D(hTowE, "pdf/QA/hTowE.pdf",
@@ -403,7 +654,13 @@ void make_qa_pdfs(const char *infile = "data_merged.root")
       if (hdeltaz) Save1D(hdeltaz, "pdf/QA/hdeltaz.pdf",
                            "#it{V}_{z,TPC} - #it{V}_{z,VPD} (cm)", "Counts", false, "HIST", kTopRight,
                            3.0, "", 800, 600, -3.0);
+      if (hzvertex) Save1D(hzvertex, "pdf/QA/hzvertex.pdf",
+                           "#it{v}_{z} (cm)", "Weighted counts", false, "E1", kTopRight,
+                           -35.0, "", 800, 600, 25.0);
 
+      if (hRefMultCorr) Save1D(hRefMultCorr, "pdf/QA/hRefMultCorr.pdf",
+                               "refMult_{corr}", "Counts", true, "HIST", kTopRight,
+                               0.0, "", 800, 600, 0.0, centRegionsRefMult, kNumCentRegions);
 
       if (hTowEtaPhi)   Save2D(hTowEtaPhi,   "pdf/QA/hTowEtaPhi.pdf",   "#eta_{tow} (-)", "#varphi_{tow} (rad)", true, kTopRight);
       if (hTrackEtaPhi) Save2D(hTrackEtaPhi, "pdf/QA/hTrackEtaPhi.pdf", "#eta_{trk} (-)", "#varphi_{trk} (rad)", true, kTopRight);
@@ -422,9 +679,9 @@ void make_qa_pdfs(const char *infile = "data_merged.root")
     }
   }
 
-  // ============================================================
-  // 2) Jets: loop R*/CENT*/JetTree
-  // ============================================================
+  TList* hNEFGroups = new TList();
+  hNEFGroups->SetOwner(kTRUE);
+
   TIter itR(fin->GetListOfKeys());
   TKey* keyR = 0;
 
@@ -449,6 +706,9 @@ void make_qa_pdfs(const char *infile = "data_merged.root")
       if (std::string(keyC->GetClassName()) != "TDirectoryFile") continue;
 
       std::string cname = keyC->GetName();
+      
+      if (cname != "CENT_0_10" && cname != "PERI_60_80") continue;
+
       TDirectoryFile* dirC = (TDirectoryFile*)dirR->Get(cname.c_str());
       if (!dirC) continue;
 
@@ -460,8 +720,7 @@ void make_qa_pdfs(const char *infile = "data_merged.root")
       TString pdfC = Form("%s/%s", pdfR.Data(), cname.c_str());
       gSystem->mkdir(pdfC.Data(), kTRUE);
 
-      // selection (NO area cut applied here)
-      TString sel = Form("(reco_pt > %g) && (reco_trigger_match==1)", RECO_DUMMY_CUT);
+      TString sel = Form("(reco_pt_corr > %g) && (reco_trigger_match==1)", pt_reco_corr_cut);
       TString cut = Form("(centralityWeight) * (%s)", sel.Data());
 
       TString tag = Form("%s_%s", rname.c_str(), cname.c_str());
@@ -481,18 +740,27 @@ void make_qa_pdfs(const char *infile = "data_merged.root")
 
       NormalizeProb(hNEFJet);
 
-      // 1D area: draw red cut line at A = CUT_AREA_R
       Save1D(hAreaJet,
              Form("%s/%s.pdf", pdfC.Data(), SafeName(hAreaJet->GetName()).Data()),
              "A (-)", "Weighted entries", true, "E1", kTopRight,
              areaCutLine, centLabel);
 
-      // 1D NEF: unchanged
       Save1D(hNEFJet,
              Form("%s/%s.pdf", pdfC.Data(), SafeName(hNEFJet->GetName()).Data()),
              "NEF (-)", "Probability (a.u.)", true, "E1", kTopLeft, -1.0, centLabel);
 
-      // 2D ptcorr vs area: draw red cut line at same A
+      TList* group = (TList*)hNEFGroups->FindObject(cname.c_str());
+      if (!group) {
+        group = new TList();
+        group->SetName(cname.c_str());
+        group->SetOwner(kTRUE);
+        hNEFGroups->Add(group);
+      }
+      TH1D* hNEFforOverlay = (TH1D*)hNEFJet->Clone(Form("hNEF_ov_%s", tag.Data()));
+      hNEFforOverlay->SetDirectory(0);
+      hNEFforOverlay->SetTitle(rname.c_str());
+      group->Add(hNEFforOverlay);
+
       Save2D(hPtArea,
              Form("%s/%s.pdf", pdfC.Data(), SafeName(hPtArea->GetName()).Data()),
              "A (-)", "#it{p}_{T,reco}^{corr} (GeV/#it{c})", true, kTopRight,
@@ -503,6 +771,20 @@ void make_qa_pdfs(const char *infile = "data_merged.root")
       delete hPtArea;
     }
   }
+
+  {
+    TIter itGroup(hNEFGroups);
+    TList* group = 0;
+    while ((group = (TList*)itGroup())) {
+      std::string cname = group->GetName();
+      TString centLabel = CentralityLabelFromDir(cname);
+
+      TString outPdf = Form("pdf/Jets/hNEF_allR_%s.pdf", cname.c_str());
+      SaveNEFOverlay(group, outPdf, centLabel);
+    }
+  }
+
+  delete hNEFGroups;
 
   fin->Close();
   std::cout << "Done. PDFs under pdf/QA, pdf/Jets\n";

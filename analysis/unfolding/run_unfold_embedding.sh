@@ -12,9 +12,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 # Files relative to this structure
-#SIF="${SCRIPT_DIR}/roounfold.sif"              # analysis/unfolding/roounfold.sif
-SIF=/gpfs/mnt/gpfs01/star/pwg/svomich/JetsTrees/analysis/unfolding/roounfold.sif
-MACRO="${SCRIPT_DIR}/unfold_embedding.cxx"    # analysis/unfolding/unfold_embedding.cxx
+SIF="${SCRIPT_DIR}/roounfold.sif"              # analysis/unfolding/roounfold.sif
+MACRO="${SCRIPT_DIR}/unfold_embedding_inclusive.cxx"    # analysis/unfolding/unfold_embedding.cxx
 
 ########################
 # Arguments
@@ -31,11 +30,11 @@ if [[ $# -ge 2 ]]; then
     INPUT="${BASE}/trees/$2"
   fi
 else
-  INPUT="${BASE}/trees/embedding_merged.root"
+  INPUT="${BASE}/trees/embedding_merged_MCReco1p5.root"
 fi
 
 # 3rd arg: output directory (default: analysis/unfolding/out_embedding under BASE)
-OUT_DIR="${3:-${SCRIPT_DIR}/out_embedding_${METHOD}_origina}l"
+OUT_DIR="${3:-${SCRIPT_DIR}/out_embedding_${METHOD}}"
 
 ########################
 # Checks
@@ -62,24 +61,13 @@ mkdir -p "$OUT_DIR"
 # Run inside container
 ########################
 
-#apptainer exec -e -B /gpfs01 \
-#  "$SIF" \
-#  root -l -b <<EOF
-#gSystem->Load("libRooUnfold");
-#.x ${MACRO}+("${INPUT}","${OUT_DIR}","${METHOD}");
-#.q
-#EOF
-
-apptainer exec \
-  --bind /gpfs/mnt/gpfs01:/gpfs/mnt/gpfs01 \
-  --bind /gpfs/mnt/gpfs01:/gpfs01 \
+apptainer exec -e -B "$BASE" \
   "$SIF" \
   root -l -b <<EOF
 gSystem->Load("libRooUnfold");
 .x ${MACRO}+("${INPUT}","${OUT_DIR}","${METHOD}");
 .q
 EOF
-
 echo "----------------------------------------"
 echo "Done."
 echo "----------------------------------------"

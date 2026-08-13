@@ -65,7 +65,8 @@ class StPicoCuts : public TNamed
 	//void setHotStripEtaListFileName(const char* fileName);
 	//void setHotStripPhiListFileName(const char* fileName);
 
-  void setCutVzMax(float f);
+  
+  void setCutVzRange(float min, float max);
   void setCutVzVpdVzMax(float f);
 
   void setCutNHitsFitMin(int i);
@@ -108,6 +109,7 @@ private:
 
 
   // -- event cuts
+  float mVzMin;
   float mVzMax;
   float mVzVpdVzMax;
   float mRefMultMin;
@@ -134,7 +136,8 @@ private:
 inline void StPicoCuts::setBadRunListFileName(const char* fileName) { mBadRunListFileName = fileName; }
 inline void StPicoCuts::addTriggerId(unsigned int triggerId) {mVecTriggerIdList.push_back(triggerId);}
 
-inline void StPicoCuts::setCutVzMax(float f)              { mVzMax            = f; }
+
+inline void StPicoCuts::setCutVzRange(float min, float max) { mVzMin = min; mVzMax = max; }
 inline void StPicoCuts::setCutVzVpdVzMax(float f)         { mVzVpdVzMax       = f; }
 
 inline void StPicoCuts::setCutNHitsFitMin(int i)          { mNHitsFitMin      = i; }

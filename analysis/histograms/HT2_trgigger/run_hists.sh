@@ -11,7 +11,7 @@ IN_BASENAME="${1:-embedding_merged.root}"
 OUT_BASENAME="${2:-hists.root}"
 
 # Paths relative to the script location
-INPUT="${SCRIPT_DIR}/../../trees/${IN_BASENAME}"
+INPUT="${SCRIPT_DIR}/../../../trees/${IN_BASENAME}"
 OUTPUT="${SCRIPT_DIR}/${OUT_BASENAME}"
 MACRO="${SCRIPT_DIR}/make_hists.C"
 

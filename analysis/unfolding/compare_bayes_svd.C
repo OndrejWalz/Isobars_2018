@@ -44,16 +44,17 @@ static const vector<string> kCentralities = {"CENT_0_10", "MID_20_40", "PERI_60_
 static const vector<string> kRadii        = {"R0.2", "R0.3", "R0.4"};
 
 // Bayes iterations — must match kBayesIters[] in unfold_embedding.C
-static const int kBayesIters[] = {1, 4, 5, 7};
+static const int kBayesIters[] = {4};
 static const int kNBayesIters  = sizeof(kBayesIters)/sizeof(kBayesIters[0]);
 
 // SVD regularization values — must match kRegValues[] in unfold_embedding.C
-static const int kSVDRegs[]  = {3, 4, 5};
-static const int kNSVDRegs   = sizeof(kSVDRegs)/sizeof(kSVDRegs[0]);
+  static const int kSVDRegs[]  = {3};
+   static const int kNSVDRegs   = 1;
+   static const int kBestSVDIdx = 0;  // k = 3
 
 // Which Bayes iteration and SVD k to use for the bottom-pad direct ratio (0-based index).
-static const int kBestBayesIdx = kNBayesIters - 3;  // 
-static const int kBestSVDIdx   = kNSVDRegs    - 1;  // k = 5
+static const int kBestBayesIdx = 0;  // 
+//static const int kBestSVDIdx   = kNSVDRegs    - 1;  // k = 5
 
 // Truth binning
 static const int    nbins_truth = 10;
@@ -184,7 +185,8 @@ void compare_bayes_svd(const char* bayesFile,
           continue;
         }
         TH1D* hTruth = RebinToTruth(hTruthRaw, ("hTruth_"+tag).c_str());
-
+        TH1D *hMeasRaw  = GetHist(fB, tag, "hMeasTest");
+        TH1D *hMeas = RebinToTruth(hMeasRaw, ("hMeas_"+tag).c_str());
         // ---------------------------------------------------------------
         // Canvas: 3 pads
         //   pSpec  (top,  45-100%) : all spectra, log-y
@@ -216,15 +218,22 @@ void compare_bayes_svd(const char* bayesFile,
         hTruth->SetMarkerSize(1.1);
         hTruth->GetXaxis()->SetLabelSize(0);
         hTruth->GetXaxis()->SetTitleSize(0);
-        hTruth->GetYaxis()->SetTitle("dN/dp_{T}");
+        hTruth->GetYaxis()->SetTitle("(1/#it{N}_{evt}) d#it{N}/d#it{p}_{T, reco}^{corr} a.u.");
         hTruth->GetYaxis()->SetTitleOffset(1.25);
         hTruth->GetYaxis()->SetTitleSize(0.045);
         hTruth->GetYaxis()->SetLabelSize(0.040);
         hTruth->Draw("E1");
+        hMeas->SetMarkerStyle(24);
+        hMeas->SetMarkerColor(kGray+2);
+        hMeas->SetLineColor(kGray+2);
+        hMeas->Draw("E1 SAME");
+
+       
 
         TLegend* leg = new TLegend(0.55, 0.52, 0.94, 0.94);
         leg->SetBorderSize(0); leg->SetFillStyle(0); leg->SetTextSize(0.032);
-        leg->AddEntry(hTruth, "Truth (test)", "lp");
+        leg->AddEntry(hTruth, "Truth (closure test)", "lp");
+        leg->AddEntry(hMeas,  "Measured (closure test)", "lp");
 
         for (int ib = 0; ib < kNBayesIters; ++ib) {
           if (!hBayes[ib]) continue;
@@ -232,7 +241,7 @@ void compare_bayes_svd(const char* bayesFile,
           hBayes[ib]->SetMarkerColor(kBayesCols[ib]);
           hBayes[ib]->SetLineColor(kBayesCols[ib]);
           hBayes[ib]->Draw("E1 SAME");
-          leg->AddEntry(hBayes[ib], Form("Bayes %d it.", kBayesIters[ib]), "lp");
+          leg->AddEntry(hBayes[ib], Form("Unfolded: Bayes %d it.", kBayesIters[ib]), "lp");
         }
         for (int is = 0; is < kNSVDRegs; ++is) {
           if (!hSVD[is]) continue;
@@ -240,18 +249,19 @@ void compare_bayes_svd(const char* bayesFile,
           hSVD[is]->SetMarkerColor(kSVDCols[is]);
           hSVD[is]->SetLineColor(kSVDCols[is]);
           hSVD[is]->Draw("E1 SAME");
-          leg->AddEntry(hSVD[is], Form("SVD k=%d", kSVDRegs[is]), "lp");
+          leg->AddEntry(hSVD[is], Form("Unfolded: SVD #it{k}_{reg} = %d", kSVDRegs[is]), "lp");
         }
         leg->Draw();
 
         {
           TLatex lat;
           lat.SetNDC(true); lat.SetTextFont(42); lat.SetTextSize(0.038);
-          lat.DrawLatex(0.16, 0.30, "Au+Au  #sqrt{#it{s}_{NN}} = 200 GeV");
+          lat.DrawLatex(0.16, 0.30, "p+p #otimes Au+Au  #sqrt{#it{s}_{NN}} = 200 GeV");
           lat.DrawLatex(0.16, 0.23,
               Form("#it{R} = %.1f,  %s", Rval, NiceCentLabel(C).Data()));
           lat.DrawLatex(0.16, 0.16,
               Form("#it{p}_{T}^{lead} #geq %.0f GeV/#it{c}", cut));
+          lat.DrawLatex(0.16, 0.09, "THIS THESIS");
         }
 
         // ==================== PAD 2: Unfolded / Truth ====================
@@ -270,7 +280,7 @@ void compare_bayes_svd(const char* bayesFile,
           if (!firstR) {
             r->SetTitle("");
             r->GetYaxis()->SetTitle("Unfolded / Truth");
-            r->GetYaxis()->SetRangeUser(0.5, 1.5);
+            r->GetYaxis()->SetRangeUser(0.7, 1.3);
             r->GetYaxis()->SetTitleSize(0.075);
             r->GetYaxis()->SetLabelSize(0.065);
             r->GetYaxis()->SetTitleOffset(0.75);
@@ -309,15 +319,15 @@ void compare_bayes_svd(const char* bayesFile,
           hComp->SetLineColor(kViolet+2);
           hComp->SetTitle("");
 
-          hComp->GetXaxis()->SetTitle("#it{p}_{T} (GeV/#it{c})");
+          hComp->GetXaxis()->SetTitle("#it{p}_{T, reco}^{corr} (GeV/#it{c})");
           hComp->GetXaxis()->SetTitleSize(0.13);
           hComp->GetXaxis()->SetLabelSize(0.11);
           hComp->GetXaxis()->SetTitleOffset(1.05);
 
           hComp->GetYaxis()->SetTitle(
-              Form("Bayes %dit / SVD k=%d",
+              Form("Bayes %d it. / SVD #it{k}_{reg} = %d",
                    kBayesIters[kBestBayesIdx], kSVDRegs[kBestSVDIdx]));
-          hComp->GetYaxis()->SetRangeUser(0.7, 1.3);
+          hComp->GetYaxis()->SetRangeUser(0.85, 1.15);
           hComp->GetYaxis()->SetTitleSize(0.095);
           hComp->GetYaxis()->SetLabelSize(0.090);
           hComp->GetYaxis()->SetTitleOffset(0.58);

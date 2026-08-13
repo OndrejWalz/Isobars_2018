@@ -29,7 +29,7 @@ using std::endl;
 static const int kBayesIterDefault = 4;
 
 // SVD regularization values (same as embedding code)
-static const int kSVDRegValues[] = {4};
+static const int kSVDRegValues[] = {3};
 static const int kNSVDReg        = sizeof(kSVDRegValues)/sizeof(kSVDRegValues[0]);
 
 // measured & truth binning (must be IDENTICAL to what you used for response)
@@ -244,42 +244,42 @@ void unfold_data(const char* dataFile,
          hMeasData_raw->SetDirectory(0);
 
         // // Load trigger efficiency (must match measured binning)
-        // TH1D* hTrigEffReco = GetEffHistChecked(
-        //     fEff,
-        //     tagfile,
-        //     "h_trig_eff_reco",
-        //     hMeasData,
-        //     Form("hTrigEffReco_%s", tag.c_str()),
-        //     /*verbose=*/true);
+        TH1D* hTrigEffReco = GetEffHistChecked(
+            fEff,
+            tagfile,
+            "h_trig_eff_reco",
+            hMeasData,
+            Form("hTrigEffReco_%s", tag.c_str()),
+            /*verbose=*/true);
 
-        // if (hTrigEffReco) {
-        //   ApplyDivideCorr(hMeasData, hTrigEffReco, /*verbose=*/true);
-        //   cout << "    data integral after trig-eff corr = "
-        //       << hMeasData->Integral(0,-1) << endl;
-        // }
+        if (hTrigEffReco) {
+          ApplyDivideCorr(hMeasData, hTrigEffReco, /*verbose=*/true);
+          cout << "    data integral after trig-eff corr = "
+              << hMeasData->Integral(0,-1) << endl;
+        }
 
-        TH1D* hTrigEffReco = 0; // TEMP: trig-eff disabled
+        //TH1D* hTrigEffReco = 0; // TEMP: trig-eff disabled
 
 
         TH1D* hMeasData_trigCorr = (TH1D*)hMeasData->Clone(Form("hMeasData_trigCorr_%s", tag.c_str()));
         hMeasData_trigCorr->SetDirectory(0);
 
         // ---- Purity correction (fake removal) ----
-        // TH1D* hPurityReco = GetEffHistChecked(
-        //     fEff,
-        //     tagfile,
-        //     "h_pur_eff_reco",          
-        //     hMeasData,                 // same binning as current measured spectrum
-        //     Form("hPurityReco_%s", tag.c_str()),
-        //     /*verbose=*/true);
+        TH1D* hPurityReco = GetEffHistChecked(
+            fEff,
+            tagfile,
+            "h_pur_eff_reco",          
+            hMeasData,                 // same binning as current measured spectrum
+            Form("hPurityReco_%s", tag.c_str()),
+            /*verbose=*/true);
 
-        // if (hPurityReco) {
-        //   ApplyMultiplyCorr(hMeasData, hPurityReco, /*verbose=*/true);
-        //   cout << "    data integral after purity corr = "
-        //       << hMeasData->Integral(0,-1) << endl;
-        // }
+        if (hPurityReco) {
+          ApplyMultiplyCorr(hMeasData, hPurityReco, /*verbose=*/true);
+          cout << "    data integral after purity corr = "
+              << hMeasData->Integral(0,-1) << endl;
+        }
 
-         TH1D* hPurityReco = 0; // TEMP: purity correction disabled
+         //TH1D* hPurityReco = 0; // TEMP: purity correction disabled
 
         // ---------------- load response & prior ----------------
         TDirectory* dResp =
@@ -345,25 +345,25 @@ void unfold_data(const char* dataFile,
           hUnfoldedTruthBins_raw->SetDirectory(0);
 
           // -------- Matching efficiency correction (TRUTH binning, AFTER unfolding) --------
-          // TH1D* hMatchEffTruth = GetEffHistChecked(
-          //     fEff,
-          //     tagfile,
-          //     "h_match_eff_truth",
-          //     hUnfoldedTruthBins_raw,
-          //     Form("hMatchEffTruth_%s", tag.c_str()),
-          //     /*verbose=*/true);
+          TH1D* hMatchEffTruth = GetEffHistChecked(
+              fEff,
+              tagfile,
+              "h_match_eff_truth",
+              hUnfoldedTruthBins_raw,
+              Form("hMatchEffTruth_%s", tag.c_str()),
+              /*verbose=*/true);
 
-          // TH1D* hUnfoldedTruthBins_matchCorr = 0;
-          // if (hMatchEffTruth) {
-          //   hUnfoldedTruthBins_matchCorr = (TH1D*)hUnfoldedTruthBins_raw->Clone(
-          //       Form("hUnfoldedTruthBins_matchCorr_%s", tag.c_str()));
-          //   hUnfoldedTruthBins_matchCorr->SetDirectory(0);
+          TH1D* hUnfoldedTruthBins_matchCorr = 0;
+          if (hMatchEffTruth) {
+            hUnfoldedTruthBins_matchCorr = (TH1D*)hUnfoldedTruthBins_raw->Clone(
+                Form("hUnfoldedTruthBins_matchCorr_%s", tag.c_str()));
+            hUnfoldedTruthBins_matchCorr->SetDirectory(0);
 
-          //   ApplyDivideCorr(hUnfoldedTruthBins_matchCorr, hMatchEffTruth, /*verbose=*/true);
-          // }
+            ApplyDivideCorr(hUnfoldedTruthBins_matchCorr, hMatchEffTruth, /*verbose=*/true);
+          }
 
-          TH1D* hMatchEffTruth = 0;               // TEMP: match-eff disabled
-          TH1D* hUnfoldedTruthBins_matchCorr = 0; // keep null
+          //TH1D* hMatchEffTruth = 0;               // TEMP: match-eff disabled
+         // TH1D* hUnfoldedTruthBins_matchCorr = 0; // keep null
 
           // ---------------- save to output file ----------------
           TDirectory* dOut = fOutAll->mkdir(tagfile.c_str());

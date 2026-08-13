@@ -106,7 +106,7 @@ void runPicoHFJetMaker(TString inputFile, TString outputFile = "output",
   // -- File name of bad run list
   picoCuts->setBadRunListFileName(badRunListFileName);
   // -- ADD USER CUTS HERE ----------------------------
-  picoCuts->setCutVzMax(30.);
+  picoCuts->setCutVzRange(-35., 25. );
   picoCuts->setCutVzVpdVzMax(3.);
   // picoCuts->setCutRefMult(396, 100000); //REMEMBER now only central
   picoCuts->setCutRefMult(0, 100000);
@@ -140,10 +140,10 @@ void runPicoHFJetMaker(TString inputFile, TString outputFile = "output",
   // runs
 
   // 2018 MB triggers
-  // picoCuts->addTriggerId(600001);    // VPDMB-30
-  // picoCuts->addTriggerId(600011);    // VPDMB-30
-  // picoCuts->addTriggerId(600021);    // VPDMB-5
-  // picoCuts->addTriggerId(600031);    // VPDMB-5
+  picoCuts->addTriggerId(600001);    // VPDMB-30
+  picoCuts->addTriggerId(600011);    // VPDMB-30
+  picoCuts->addTriggerId(600021);    // VPDMB-5
+  picoCuts->addTriggerId(600031);    // VPDMB-5
 
   //       //SL16j triggers
   // picoCuts->addTriggerId(520802);    // VPDMB-5-p-hlt
@@ -161,9 +161,9 @@ void runPicoHFJetMaker(TString inputFile, TString outputFile = "output",
 
   // 2018 BHT2 triggers
 
-  picoCuts->addTriggerId(18);    // BHT2
-  picoCuts->addTriggerId(600203);    // BHT2
-  picoCuts->addTriggerId(600213);    // BHT2
+  // picoCuts->addTriggerId(18);    // BHT2 testing trigger with low stat
+  //  picoCuts->addTriggerId(600203);    // BHT2
+  //  picoCuts->addTriggerId(600213);    // BHT2
 
   picoCuts->setCutNHitsFitMin(14);
   picoCuts->setCutNHitsFitnHitsMax(0.52);
@@ -189,8 +189,7 @@ void runPicoHFJetMaker(TString inputFile, TString outputFile = "output",
   stPicoHFJetMaker->setNJetsRemove(1);
   stPicoHFJetMaker->setR_bg(0.3);
   stPicoHFJetMaker->setHadronCorr(1.0);
-  //stPicoHFJetMaker->setTriggerThreshold(18); //~4.2 GeV is the HT2 threshold = 18 ADC
-  stPicoHFJetMaker->setTriggerThreshold(0); //~4.2 GeV is the HT2 threshold = 18 ADC
+  stPicoHFJetMaker->setTriggerThreshold(18); //~4.2 GeV is the HT2 threshold = 18 ADC
   stPicoHFJetMaker->setMaxNeutralFraction(0.95); // default
   stPicoHFJetMaker->setMaxDcaZHadronCorr(3.0); // cm, max DCA_z for global tracks used for hadronic correction
 

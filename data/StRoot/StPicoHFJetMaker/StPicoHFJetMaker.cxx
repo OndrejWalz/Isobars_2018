@@ -120,6 +120,7 @@ int StPicoHFJetMaker::InitJets() {
   mOutList->Add(new TH1D("hRefMultCorr_ACC", "Corrected refMult;refMultCorr;counts", 800, 0, 800));
 
 
+
   TDirectory* fileDir = gDirectory;
   fTreeRC.clear();
   fTreeRC.reserve(fR.size());
@@ -232,42 +233,50 @@ int StPicoHFJetMaker::MakeJets() {
   vector<fastjet::PseudoJet> MCjetTracks;
 
 
+fRunNumber = mPicoDst->event()->runId();
+fEventId   = mPicoDst->event()->eventId();
+int refMult = mPicoDst->event()->refMult();
+double vz  = mPrimVtx.z();
 
-  fRunNumber = mPicoDst->event()->runId();
-  fEventId   = mPicoDst->event()->eventId();
-  int refMult = mPicoDst->event()->refMult();
-  double vz  = mPrimVtx.z();
-  double refMultCorr = mRefmultCorrUtil->getRefMultCorr();
+// -- Centrality via StRefMultCorr (isobar API) --
+// Order matters: init(run) must come before initEvent(), and initEvent()
+// must come before any getRefMultCorr()/getCentralityBin9()/getWeight() call.
 
-  // -- Centrality via StRefMultCorr (isobar API)
-  mRefmultCorrUtil->init(fRunNumber);
+mRefmultCorrUtil->init(fRunNumber);
 
-  if (mRefmultCorrUtil->isBadRun(fRunNumber)) return kStOK;
+if (mRefmultCorrUtil->isBadRun(fRunNumber)) return kStOK;
 
-  TH2D* hRefMultVsbTofMatch = (TH2D*)mOutList->FindObject("hRefMultVsbTofMatch");
-  if (hRefMultVsbTofMatch)
-    hRefMultVsbTofMatch->Fill(mPicoDst->event()->nBTOFMatch(), refMult);
+TH2D* hRefMultVsbTofMatch = (TH2D*)mOutList->FindObject("hRefMultVsbTofMatch");
+if (hRefMultVsbTofMatch)
+  hRefMultVsbTofMatch->Fill(mPicoDst->event()->nBTOFMatch(), refMult);
 
-  TH1D* hRefMultCorr = (TH1D*)mOutList->FindObject("hRefMultCorr");
-  if (hRefMultCorr) hRefMultCorr->Fill(refMultCorr);
+if (!mRefmultCorrUtil->passnTofMatchRefmultCut(refMult, mPicoDst->event()->nBTOFMatch()))
+  return kStOK;
 
-  if (!mRefmultCorrUtil->passnTofMatchRefmultCut(refMult, mPicoDst->event()->nBTOFMatch())) return kStOK;
+TH2D* hRefMultVsbTofMatchAfter = (TH2D*)mOutList->FindObject("hRefMultVsbTofMatch_ACC");
+if (hRefMultVsbTofMatchAfter)
+  hRefMultVsbTofMatchAfter->Fill(mPicoDst->event()->nBTOFMatch(), refMult);
 
-  TH2D* hRefMultVsbTofMatchAfter = (TH2D*)mOutList->FindObject("hRefMultVsbTofMatch_ACC");
-  if (hRefMultVsbTofMatchAfter)
-    hRefMultVsbTofMatchAfter->Fill(mPicoDst->event()->nBTOFMatch(), refMult);
+// Now that we're on the right run parameterization and past the TOF cut,
+// initialize this event and pull the corrected multiplicity/centrality.
+mRefmultCorrUtil->initEvent((UShort_t)refMult, vz, mPicoDst->event()->ZDCx());
 
-  TH1D* hRefMultCorrAcc = (TH1D*)mOutList->FindObject("hRefMultCorr_ACC");
-  if (hRefMultCorrAcc) hRefMultCorrAcc->Fill(refMultCorr);
-  mRefmultCorrUtil->initEvent((UShort_t)refMult, vz, mPicoDst->event()->ZDCx());
+double refMultCorr = mRefmultCorrUtil->getRefMultCorr();
 
-  if (mRefmultCorrUtil->getCentralityBin9() < 0) return kStOK;
+TH1D* hRefMultCorr = (TH1D*)mOutList->FindObject("hRefMultCorr");
+if (hRefMultCorr) hRefMultCorr->Fill(refMultCorr);
 
-  fCentrality = mRefmultCorrUtil->getCentralityBin9(); // 8 = 0-5 %,..., 0= 70-80 %
+TH1D* hRefMultCorrAcc = (TH1D*)mOutList->FindObject("hRefMultCorr_ACC");
+if (hRefMultCorrAcc) hRefMultCorrAcc->Fill(refMultCorr);
 
-  
-  fCentralityWeight  = mRefmultCorrUtil->getWeight();  
+if (mRefmultCorrUtil->getCentralityBin9() < 0) return kStOK;
 
+fCentrality = mRefmultCorrUtil->getCentralityBin9(); // 8 = 0-5 %,..., 0 = 70-80 %
+fCentralityWeight = mRefmultCorrUtil->getWeight();
+
+if (fCentrality < 0 || fCentrality > 8) return kStOK;
+
+if (hcent9) hcent9->Fill(fCentrality, fCentralityWeight);
   // -- Centrality bin from Table 1 (Ru boundaries)
   // if      (refMultCorr > 216) fCentrality = 0;
   // else if (refMultCorr > 151) fCentrality = 1;
@@ -280,9 +289,7 @@ int StPicoHFJetMaker::MakeJets() {
   // else                        fCentrality = -1;
 
   // if (fCentrality == -1) return kStOK;  
-  if (fCentrality < 0 || fCentrality > 8) return kStOK;
 
-  if (hcent9) hcent9->Fill(fCentrality, fCentralityWeight);
 
 
   TH1D* hTowE = (TH1D*)mOutList->FindObject("hTowE");
@@ -476,6 +483,8 @@ fastjet::AreaDefinition area_def(
 float rho = 0.0;
 TH2D* hRhoVsRefMult = (TH2D*)mOutList->FindObject("hRhoVsRefMult");
 
+
+
 fastjet::JetDefinition jet_def_for_rho(fastjet::kt_algorithm, fRBg);
 nJetsRemove = (c3 == 1 ? 2 : 1);
 
@@ -493,6 +502,8 @@ if (!vetoReco && !fullTracks.empty()) {
 if (hRhoVsRefMult && !vetoReco && !fullTracks.empty()) {
   hRhoVsRefMult->Fill(refMult, rho, fCentralityWeight);
 }
+
+
 
 //======================================================================//
 // const double ptMaxVeto = (mIsEmbedding && fpThatmax > 0.0) ? (1.5 * fpThatmax) : -1.0;

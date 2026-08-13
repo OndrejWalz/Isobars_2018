@@ -40,7 +40,7 @@ EFF_FILE="${3:-${BASE}/analysis/efficiencies/efficiencies.root}"
 
 # 4th arg: RESPONSE ROOT FILE (single file with all tag directories) diferrent for SVD or BAYES embedding unfolding
 # default: responses from embedding under unfolding/out_embedding
-RESP_FILE="${4:-${SCRIPT_DIR}/out_embedding_${METHOD}/responses_embedding.root}"
+RESP_FILE="${4:-${SCRIPT_DIR}/out_embedding_SVD_final/responses_embedding.root}"
 
 
 # 5th arg: output directory for unfolded data spectra

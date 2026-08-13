@@ -237,9 +237,9 @@ void make_hists_data(const char *system = "Ru",
         hSpec[0]->GetYaxis()->SetTitleOffset(1.3); 
         hSpec[0]->GetXaxis()->SetTitle("#it{p}_{T, reco}^{corr} (GeV/#it{c})");
         if (normalize) {
-          hSpec[0]->GetYaxis()->SetTitle(  HAS_CENT_WEIGHT ? "(1/N_{jets}) dN/dp_{T} (GeV/c)^{-1}": "(1/N_{jets}) dN/dp_{T} (GeV/c)^{-1}");
+          hSpec[0]->GetYaxis()->SetTitle(  HAS_CENT_WEIGHT ? "(1/N_{jets}) dN/d#it{p}_{T} (GeV/c)^{-1}": "(1/N_{jets}) dN/d#it{p}_{T} (GeV/c)^{-1}");
         } else {
-          hSpec[0]->GetYaxis()->SetTitle(  HAS_CENT_WEIGHT ? "dN/dp_{T} (GeV/c)^{-1}": "dN/dp_{T} (GeV/c)^{-1}");
+          hSpec[0]->GetYaxis()->SetTitle(  HAS_CENT_WEIGHT ? "dN/d#it{p}_{T} (GeV/c)^{-1}": "dN/d#it{p}_{T} (GeV/c)^{-1}");
         }
         hSpec[0]->GetXaxis()->SetRangeUser(-20, 60);
         hSpec[0]->Draw("E1");
@@ -265,7 +265,7 @@ void make_hists_data(const char *system = "Ru",
         hSpec[2]->Draw("E1 SAME");
         hSpec[3]->Draw("E1 SAME");
 
-        TLegend* leg = new TLegend(0.53, 0.68, 0.88, 0.88);
+        TLegend* leg = new TLegend(0.62, 0.68, 0.88, 0.88);
         leg->SetBorderSize(0);
         leg->SetFillStyle(0);
         leg->SetTextSize(0.035);
@@ -274,6 +274,8 @@ void make_hists_data(const char *system = "Ru",
                         Form("#it{p}_{T}^{lead} #geq %.0f GeV", PTLEAD_THR[it]),
                         "lep");
         }
+        
+        
         leg->Draw();
 
         double Rval = 0.0;
@@ -287,20 +289,23 @@ void make_hists_data(const char *system = "Ru",
         centLabel += " %";
 
         TString line1;
-        line1.Form("R = %.1f, %s", Rval, centLabel.Data());
+        line1.Form("#it{R} = %.1f, %s", Rval, centLabel.Data());
 
         TLatex tex;
         tex.SetNDC();
         tex.SetTextFont(42);
         tex.SetTextSize(0.028);
 
-        tex.DrawLatex(0.55, 0.64, line1.Data());
+        tex.DrawLatex(0.62, 0.64, line1.Data());
         if (system == std::string("Ru")) {
-            tex.DrawLatex(0.55, 0.60, "Ru+Ru (HT2)  #sqrt{s_{NN}} = 200 GeV" );
+            tex.DrawLatex(0.62, 0.60, "Ru+Ru (MB)  #sqrt{s_{NN}} = 200 GeV" );
         } else {
-            tex.DrawLatex(0.55, 0.60, "Zr+Zr (HT2) #sqrt{s_{NN}} = 200 GeV");
+            tex.DrawLatex(0.62, 0.60, "Zr+Zr (MB) #sqrt{s_{NN}} = 200 GeV");
         }
-        tex.DrawLatex(0.55, 0.56, "THIS THESIS");
+
+        tex.DrawLatex(0.62, 0.56,"anti-#it{k}_{T}, Full jets");
+
+        tex.DrawLatex(0.62, 0.52, "THIS THESIS");
 
         TString pdfName;
         pdfName.Form("%s/spectra_ptlead_%s_%s.pdf", pdfCDir.Data(), rname.c_str(), cname.c_str());

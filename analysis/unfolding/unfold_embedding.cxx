@@ -35,8 +35,9 @@ static const int    kNPtLeadCuts  = sizeof(kPtLeadCuts)/sizeof(kPtLeadCuts[0]);
 static const double kMinSignif = std::sqrt(10.0);  // content/error > sqrt(10)
 static const bool   kSavePtHatDebug = true;
 
+static const int kFirstPtHatBinToUse = 2;  // if == 2; ignore pThat bins 0 and 1  
+
 // measured & truth binning
-//----------------------------------------------------------------- original binning 
 static const int nbins_meas = 24;
 static const double bin_meas_edges[nbins_meas+1] = {
   -100,-80,-60,-40,-20,-10,-5,-2.5,0,2.5,5,7.5,10,12.5,15,17.5,
@@ -47,53 +48,6 @@ static const int nbins_truth = 10;
 static const double bin_truth_edges[nbins_truth+1] = {
   0,5,10,15,20,25,30,35,40,50,60
 };
-//----------------------------------------------------------------- bin choice: 1
-
-// static const int nbins_truth = 7;
-// static const double bin_truth_edges[nbins_truth+1] = {
-//   0, 5, 10, 15, 20, 30, 40, 60
-// };
-
-
-// static const int nbins_meas = 18;
-// static const double bin_meas_edges[nbins_meas+1] = {
-//   -100,-80,-60,-40,-20,-10,-5,-2.5,0, 5, 10, 15, 20, 25, 30, 35, 40, 50, 60
-// };
-
-// --------------------------------------------------------------bin choice: 2
-
-// static const int nbins_truth = 10;
-// static const double bin_truth_edges[nbins_truth+1] = {
-//   0, 5, 10, 15, 20, 25, 30, 35, 40, 50, 60
-// };
-
-
-// static const int nbins_meas = 18;
-// static const double bin_meas_edges[nbins_meas+1] = {
-//   -100,-80,-60,-40,-20,-10,-5,-2.5,0, 5, 10, 15, 20, 25, 30, 35, 40, 50, 60
-// };
-// --------------------------------------------------------------bin choice: 3 (same as 2 but with finer low-pt bins)
-// static const int nbins_truth = 10;
-// static const double bin_truth_edges[nbins_truth+1] = {
-//   0, 5, 10, 15, 20, 25, 30, 35, 40, 50, 60
-// };
-
-
-// static const int nbins_meas = 18;
-// static const double bin_meas_edges[nbins_meas+1] = {
-//   -100,-80,-60,-40,-20,-10,-5,-2.5,0, 3, 6, 9, 12, 15, 20, 30, 40, 50, 60
-// };
-// --------------------------------------------------------------bin choice: 4
-// static const int nbins_truth = 10;
-// static const double bin_truth_edges[nbins_truth+1] = {
-//   0, 6, 10, 15, 20, 25, 30, 35, 40, 50, 60
-// };
-
-
-// static const int nbins_meas = 23;
-// static const double bin_meas_edges[nbins_meas+1] = {
-//   -100,-80,-60,-40,-20,-10,-5,-2.5,0, 2, 4, 6, 8, 10, 12.5, 15, 17.5, 20, 25 , 30, 35, 40, 50, 60
-// };
 
 
 static const vector<string> kCentralities =
@@ -125,6 +79,10 @@ static const double kXsecWeights[kNPthatBins] =
   {1.616e+0,  1.355e-01, 2.288e-02, 5.524e-03, 2.203e-03,
    3.437e-04, 4.681e-05, 8.532e-06, 2.178e-06, 1.198e-07, 6.939e-09};
 
+static const double kNgenEvents[kNPthatBins] =
+  {1020062, 1529646, 1275275, 1019532, 1019730,
+   1020088, 1019739, 765165, 509510, 305922, 101971};   
+
 // reco dummy sentinel (keep real negative jets, reject dummy ~ -999)
 static const double RECO_PTCORR_DUMMY_CUT = -500.0;
 
@@ -152,6 +110,10 @@ static const double CUT_AREA_04 = 0.40;  // R = 0.4
 static const double CUT_NEUTRAL_FRACTION = 0.95;
 
 // --------------------------------------------------------------
+static bool DrawBayesIter(int iter)
+{
+  return (iter == 1 || iter == 4 || iter == 5 || iter == 8);
+}
 
 static void EnsureDir(const string& path){
   if (gSystem->AccessPathName(path.c_str()))
@@ -256,10 +218,10 @@ void unfold_embedding(const char* inputFile,
 
         // --- histos: train/test for closure ---
         TH1D* hMeasTrain = new TH1D(("hMeasTrain_"+tag).c_str(),
-            ";reco p_{T}^{corr} [GeV];dN/dp_{T}",
+            ";reco p_{T}^{corr} [GeV];dN_{jet}/dp_{T,reco}^{corr}",
             nbins_meas, bin_meas_edges);
         TH1D* hTrueTrain = new TH1D(("hTrueTrain_"+tag).c_str(),
-            ";mc p_{T} [GeV];dN/dp_{T}",
+            ";mc p_{T} [GeV];dN_{jet}/dp_{T,reco}^{corr}",
             nbins_truth, bin_truth_edges);
         TH1D* hMeasTest  = (TH1D*)hMeasTrain->Clone(("hMeasTest_"+tag).c_str());
         TH1D* hTrueTest  = (TH1D*)hTrueTrain->Clone(("hTrueTest_"+tag).c_str());
@@ -271,10 +233,10 @@ void unfold_embedding(const char* inputFile,
 
         // --- full-stat histos (no split) ---
         TH1D* hMeasFull = new TH1D(("hMeasFull_"+tag).c_str(),
-            ";reco p_{T}^{corr} [GeV];dN/dp_{T}",
+            ";reco p_{T}^{corr} [GeV];dN_{jet}/dp_{T,reco}^{corr}",
             nbins_meas, bin_meas_edges);
         TH1D* hTrueFull = new TH1D(("hTrueFull_"+tag).c_str(),
-            ";mc p_{T} [GeV];dN/dp_{T}",
+            ";mc p_{T} [GeV];dN_{jet}/dp_{T,reco}^{corr}",
             nbins_truth, bin_truth_edges);
         hMeasFull->SetDirectory(0);
         hTrueFull->SetDirectory(0);
@@ -310,6 +272,8 @@ void unfold_embedding(const char* inputFile,
 
         TH1D* hTrueTest_ptHat[kNPthatBins];
         TH1D* hMeasTest_ptHat[kNPthatBins];
+
+        TH2D* hRespTest_ptHat[kNPthatBins];
 
         TH1D* hPrior_ptHat[kNPthatBins];
 
@@ -365,6 +329,12 @@ void unfold_embedding(const char* inputFile,
               ";mc p_{T} [GeV];content/error",
               nbins_truth, bin_truth_edges);
 
+          hRespTest_ptHat[ip] = new TH2D(("hRespTest" + s).Data(),
+            ";p_{T}^{reco,corr};p_{T}^{mc}",
+            nbins_meas, bin_meas_edges,
+            nbins_truth, bin_truth_edges);
+
+
           hTrueFull_ptHat[ip]->SetDirectory(0);
           hMeasFull_ptHat[ip]->SetDirectory(0);
           hRespFull_ptHat[ip]->SetDirectory(0);
@@ -376,6 +346,7 @@ void unfold_embedding(const char* inputFile,
           hPrior_ptHat[ip]->SetDirectory(0);
           hTruthMask_ptHat[ip]->SetDirectory(0);
           hTruthSignif_ptHat[ip]->SetDirectory(0);
+          hRespTest_ptHat[ip]->SetDirectory(0);
         }
 
 
@@ -391,42 +362,63 @@ void unfold_embedding(const char* inputFile,
           const int ip = FindPtHatBin((double)xsecWeight);
           if (ip < 0) continue;
 
+          // Ignore first two pThat bins: indices 0 and 1
+          if (ip < kFirstPtHatBinToUse) continue;
+
           const double wCent = (double)centralityWeight;
 
           const bool haveMC = (mc_pt > 0.0);
           const bool haveReco = (reco_pt_corr > RECO_PTCORR_DUMMY_CUT);
 
-          // ----- fill prior: only MC-side cuts -----
-          if (haveMC && mc_pt_lead >= cut) {
+          // ----- truth / reco / trigger classification -----
+
+            // Truth target: no MC pTlead cut.
+            // pTlead is treated as a reco-side analysis selection.
+            const bool truthOK = haveMC;
+
+            const bool recoQualityOK =
+                haveReco &&
+                reco_neutral_fraction <= CUT_NEUTRAL_FRACTION &&
+                reco_area >= areaMin &&
+                reco_pt_lead >= cut;
+
+            const bool trigOK = reco_trigger_match;
+
+            // This is the measured-level object entering triggered data unfolding.
+            const bool measOK = recoQualityOK && trigOK;
+
+            // Use same random split for all categories of this pair/object.
+            const bool train = (rng.Uniform() > kTestFrac);
+
+            // ===== prior: truth-only, all truth jets =====
+            if (truthOK) {
             hPrior_ptHat[ip]->Fill(mc_pt, wCent);
-          }
+            }
 
-          // ----- reco-side cuts for response & closure -----
-          if (!haveReco) continue;
-          if (reco_neutral_fraction > CUT_NEUTRAL_FRACTION) continue;
+            // ===== full-statistics truth denominator =====
+            if (truthOK) {
+            hTrueFull_ptHat[ip]->Fill(mc_pt, wCent);
 
-          // existing quality/trigger cuts
-          if (!reco_trigger_match) continue;
-          if (reco_area < areaMin) continue;
+            if (train) hTrueTrain_ptHat[ip]->Fill(mc_pt, wCent);
+            else       hTrueTest_ptHat[ip] ->Fill(mc_pt, wCent);
+            }
 
-          // dual ptlead cut (both reco & MC)
-          if (!(reco_pt_lead >= cut && mc_pt_lead >= cut)) continue;
+            // ===== measured spectrum: includes matched reco and reco fakes =====
+            if (measOK) {
+            hMeasFull_ptHat[ip]->Fill(reco_pt_corr, wCent);
 
-          // ===== full-statistics response (temporary, per pThat, centrality-weighted only) =====
-          hRespFull_ptHat[ip]->Fill(reco_pt_corr, mc_pt, wCent);
-          hMeasFull_ptHat[ip]->Fill(reco_pt_corr, wCent);
-          hTrueFull_ptHat[ip]->Fill(mc_pt,        wCent);
+            if (train) hMeasTrain_ptHat[ip]->Fill(reco_pt_corr, wCent);
+            else       hMeasTest_ptHat[ip] ->Fill(reco_pt_corr, wCent);
+            }
 
-          // ===== closure split: train vs test =====
-          const bool train = (rng.Uniform() > kTestFrac);
-          if (train) {
-            hRespTrain_ptHat[ip]->Fill(reco_pt_corr, mc_pt, wCent);
-            hMeasTrain_ptHat[ip]->Fill(reco_pt_corr, wCent);
-            hTrueTrain_ptHat[ip]->Fill(mc_pt,        wCent);
-          } else {
-            hMeasTest_ptHat[ip]->Fill(reco_pt_corr, wCent);
-            hTrueTest_ptHat[ip]->Fill(mc_pt,        wCent);
-          }
+            // ===== response matrix: matched visible jets only =====
+            if (truthOK && measOK) {
+            hRespFull_ptHat[ip]->Fill(reco_pt_corr, mc_pt, wCent);
+
+            if (train) hRespTrain_ptHat[ip]->Fill(reco_pt_corr, mc_pt, wCent);
+            else       hRespTest_ptHat[ip] ->Fill(reco_pt_corr, mc_pt, wCent);
+            }
+
         }
         cout << endl;
 
@@ -469,10 +461,20 @@ void unfold_embedding(const char* inputFile,
 
 
         for (int ip = 0; ip < kNPthatBins; ++ip) {
-        const double xw = kXsecWeights[ip];
+        const double xw = kXsecWeights[ip] / kNgenEvents[ip];
+
+        bool pthatHasAnyValidTruth = false;
+        for (int jb = 1; jb <= nbins_truth; ++jb) {
+            if (validTruthBin[ip][jb]) {
+                pthatHasAnyValidTruth = true;
+                break;
+            }
+        }
+        if (!pthatHasAnyValidTruth) continue;
 
         // ---- prior ----
         for (int jb = 1; jb <= nbins_truth; ++jb) {
+          if (!validTruthBin[ip][jb]) continue;
           const double oldC = hPrior->GetBinContent(jb);
           const double oldE = hPrior->GetBinError(jb);
           const double addC = xw * hPrior_ptHat[ip]->GetBinContent(jb);
@@ -538,36 +540,37 @@ void unfold_embedding(const char* inputFile,
           }
         }
 
-        // ---- measured full/train/test ----
-        // simplest consistent-enough first version:
-        // use the 1D measured per-pThat as filled
+        // ---- measured full/train/test: merge directly, including fakes ----
         for (int ix = 1; ix <= nbins_meas; ++ix) {
-          {
+        {
             const double oldC = hMeasFull->GetBinContent(ix);
             const double oldE = hMeasFull->GetBinError(ix);
             const double addC = xw * hMeasFull_ptHat[ip]->GetBinContent(ix);
             const double addE = xw * hMeasFull_ptHat[ip]->GetBinError(ix);
+
             hMeasFull->SetBinContent(ix, oldC + addC);
             hMeasFull->SetBinError(ix, std::sqrt(oldE*oldE + addE*addE));
-          }
+        }
 
-          {
+        {
             const double oldC = hMeasTrain->GetBinContent(ix);
             const double oldE = hMeasTrain->GetBinError(ix);
             const double addC = xw * hMeasTrain_ptHat[ip]->GetBinContent(ix);
             const double addE = xw * hMeasTrain_ptHat[ip]->GetBinError(ix);
+
             hMeasTrain->SetBinContent(ix, oldC + addC);
             hMeasTrain->SetBinError(ix, std::sqrt(oldE*oldE + addE*addE));
-          }
+        }
 
-          {
+        {
             const double oldC = hMeasTest->GetBinContent(ix);
             const double oldE = hMeasTest->GetBinError(ix);
             const double addC = xw * hMeasTest_ptHat[ip]->GetBinContent(ix);
             const double addE = xw * hMeasTest_ptHat[ip]->GetBinError(ix);
+
             hMeasTest->SetBinContent(ix, oldC + addC);
             hMeasTest->SetBinError(ix, std::sqrt(oldE*oldE + addE*addE));
-          }
+        }
         }
       }
 
@@ -589,6 +592,15 @@ void unfold_embedding(const char* inputFile,
         cout << "    Integral(Meas  full)  = " << hMeasFull ->Integral(0, -1) << endl;
 
         // --- build responses ---
+
+        cout << "    Truth projection response = "
+            << hRespFull->ProjectionY("_py_tmp")->Integral(0,-1) << endl;
+        cout << "    Truth full               = "
+            << hTrueFull->Integral(0,-1) << endl;
+        cout << "    Meas projection response = "
+            << hRespFull->ProjectionX("_px_tmp")->Integral(0,-1) << endl;
+        cout << "    Meas full                = "
+            << hMeasFull->Integral(0,-1) << endl;
 
         // Full-statistics response: this one you will use for unfolding DATA
         RooUnfoldResponse response_full(hMeasFull, hTrueFull, hRespFull);
@@ -641,6 +653,8 @@ void unfold_embedding(const char* inputFile,
             hMeasTrain_ptHat[ip]->Write("hMeasTrain_centWeight");
             hRespTrain_ptHat[ip]->Write("hRespTrain_centWeight");
 
+            hRespTest_ptHat[ip]->Write("hRespTest_centWeight");
+
             hTrueTest_ptHat[ip]->Write("hTrueTest_centWeight");
             hMeasTest_ptHat[ip]->Write("hMeasTest_centWeight");
 
@@ -656,7 +670,7 @@ void unfold_embedding(const char* inputFile,
 
         if (m == "BAYES") {
           cout << "Doing Bayesian unfolding..." << endl;
-          static const int kBayesIters[] = {1, 4, 5, 7};
+          static const int kBayesIters[] = {1, 2, 3, 4, 5, 6, 7, 8};
           static const int kNBayesIters = sizeof(kBayesIters)/sizeof(kBayesIters[0]);
 
 
@@ -686,8 +700,8 @@ void unfold_embedding(const char* inputFile,
           // ========================= PLOTTING (closure) =========================
 
           // Distinct (non-blending) styles for Bayes iterations
-          static const int kUnfCols[4]   = { kRed+1, kAzure+2, kGreen+2, kOrange+7 };
-          static const int kUnfMarks[4]  = { 20, 21, 22, 33 };
+          static const int kUnfCols[8] = {kBlack,kRed+1,kBlue+1,kGreen+2,kCyan+2,kOrange+7,kMagenta+2,kViolet+1};
+          static const int kUnfMarks[8]  = { 20, 21, 22, 33, 24, 25, 26, 27 };
 
           TCanvas* c = new TCanvas(("c_"+tag).c_str(), "", 800, 1000);
 
@@ -742,6 +756,8 @@ void unfold_embedding(const char* inputFile,
           leg->AddEntry(hM_truth, "Measured (test)", "lp");
 
           for (int ib = 0; ib < kNBayesIters; ++ib) {
+            if (!DrawBayesIter(kBayesIters[ib])) continue;
+
             TH1D* w = unfoldedTruth[ib];
             if (!w) continue;
 
@@ -772,6 +788,8 @@ void unfold_embedding(const char* inputFile,
 
           TH1D* firstRatio = 0;
           for (int ib = 0; ib < kNBayesIters; ++ib) {
+            if (!DrawBayesIter(kBayesIters[ib])) continue;
+
             TH1D* hunf_reb = unfoldedTruth[ib];
             if (!hunf_reb) continue;
 
@@ -851,6 +869,189 @@ void unfold_embedding(const char* inputFile,
               c->SaveAs(pngPath.c_str());
             }
 
+
+            // ========================= ITERATION STABILITY PLOT =========================
+
+            TCanvas* cstab = new TCanvas(("c_stability_"+tag).c_str(), "", 800, 1000);
+
+            TPad* pTopS = new TPad(("pTop_stability_"+tag).c_str(), "", 0.0, 0.30, 1.0, 1.0);
+            TPad* pBotS = new TPad(("pBot_stability_"+tag).c_str(), "", 0.0, 0.00, 1.0, 0.30);
+
+            pTopS->SetLeftMargin(0.12);
+            pTopS->SetRightMargin(0.03);
+            pTopS->SetTopMargin(0.05);
+            pTopS->SetBottomMargin(0.02);
+
+            pBotS->SetLeftMargin(0.12);
+            pBotS->SetRightMargin(0.03);
+            pBotS->SetTopMargin(0.02);
+            pBotS->SetBottomMargin(0.30);
+
+            pTopS->Draw();
+            pBotS->Draw();
+
+            // ---------- top: unfolded spectra ----------
+            pTopS->cd();
+            gPad->SetLogy();
+
+            TH1D* frameStab = 0;
+
+            TLegend* legStab = new TLegend(0.55, 0.55, 0.90, 0.90);
+            legStab->SetBorderSize(0);
+            legStab->SetFillStyle(0);
+            legStab->SetTextSize(0.030);
+
+            static const int kStabCols[] = {
+              kBlack, kRed+1, kAzure+2, kGreen+2, kOrange+7,
+              kMagenta+2, kCyan+2, kViolet+1, kGray+2, kBlue+1
+            };
+
+            static const int kStabMarks[] = {
+              20, 21, 22, 23, 33,
+              34, 29, 47, 24, 25
+            };
+
+            for (int ib = 0; ib < kNBayesIters; ++ib) {
+              TH1D* h = unfoldedTruth[ib];
+              if (!h) continue;
+
+              const int col = kStabCols[ib % 10];
+              const int mar = kStabMarks[ib % 10];
+
+              h->SetMarkerStyle(mar);
+              h->SetMarkerColor(col);
+              h->SetLineColor(col);
+
+              h->GetXaxis()->SetLabelSize(0);
+              h->GetXaxis()->SetTitleSize(0);
+              h->GetYaxis()->SetTitle("Unfolded yield");
+              h->GetYaxis()->SetTitleOffset(1.2);
+
+              if (!frameStab) {
+                frameStab = h;
+                frameStab->SetTitle("");
+                frameStab->Draw("E1");
+              } else {
+                h->Draw("E1 SAME");
+              }
+
+              legStab->AddEntry(h, Form("Bayes %d it.", kBayesIters[ib]), "lp");
+            }
+
+            legStab->Draw();
+
+            {
+              TLatex lat;
+              lat.SetNDC(true);
+              lat.SetTextFont(42);
+              lat.SetTextSize(0.040);
+              lat.DrawLatex(0.16, 0.28, "Au+Au  #sqrt{#it{s}_{NN}} = 200 GeV");
+              lat.DrawLatex(0.16, 0.22,
+                            Form("#it{R} = %.1f, %s", Rval, NiceCentLabel(C).Data()));
+              lat.DrawLatex(0.16, 0.16,
+                            Form("#it{p}_{T}^{lead} #geq %.0f GeV/#it{c}", cut));
+              lat.DrawLatex(0.16, 0.10, "Bayesian unfolding stability");
+            }
+
+            // ---------- bottom: consecutive iteration ratios ----------
+            pBotS->cd();
+
+            TH1D* firstStabRatio = 0;
+
+            for (int ib = 1; ib < kNBayesIters; ++ib) {
+              TH1D* hNum = unfoldedTruth[ib];
+              TH1D* hDen = unfoldedTruth[ib-1];
+
+              if (!hNum || !hDen) continue;
+
+              TH1D* r = (TH1D*)hNum->Clone(
+                  Form("ratio_iter%d_over_iter%d_%s",
+                      kBayesIters[ib], kBayesIters[ib-1], tag.c_str())
+              );
+
+              r->SetDirectory(0);
+              r->Divide(hDen);
+
+              const int col = kStabCols[ib % 10];
+              const int mar = kStabMarks[ib % 10];
+
+              r->SetMarkerStyle(mar);
+              r->SetMarkerColor(col);
+              r->SetLineColor(col);
+
+              r->SetTitle("");
+              r->GetYaxis()->SetTitle("Iter. ratio");
+              r->GetYaxis()->SetRangeUser(0.8, 1.2);
+
+              r->GetXaxis()->SetTitle("#it{p}_{T}^{truth} (GeV/#it{c})");
+              r->GetXaxis()->SetTitleSize(0.11);
+              r->GetXaxis()->SetLabelSize(0.09);
+              r->GetXaxis()->SetTitleOffset(1.05);
+
+              r->GetYaxis()->SetTitleSize(0.09);
+              r->GetYaxis()->SetLabelSize(0.08);
+              r->GetYaxis()->SetTitleOffset(0.65);
+              r->GetYaxis()->SetNdivisions(505);
+
+              if (!firstStabRatio) {
+                firstStabRatio = r;
+                firstStabRatio->Draw("E1");
+              } else {
+                r->Draw("E1 SAME");
+              }
+
+              r->Write(
+                Form("BayesStabilityRatio_iter%d_over_iter%d",
+                    kBayesIters[ib], kBayesIters[ib-1])
+              );
+            }
+
+            if (firstStabRatio) {
+              const double xmin = firstStabRatio->GetXaxis()->GetXmin();
+              const double xmax = firstStabRatio->GetXaxis()->GetXmax();
+
+              TLine* l1 = new TLine(xmin, 1.00, xmax, 1.00);
+              l1->SetLineColor(kBlack);
+              l1->SetLineStyle(1);
+              l1->Draw();
+
+              TLine* l2 = new TLine(xmin, 1.05, xmax, 1.05);
+              l2->SetLineColor(kGray+1);
+              l2->SetLineStyle(2);
+              l2->Draw();
+
+              TLine* l3 = new TLine(xmin, 0.95, xmax, 0.95);
+              l3->SetLineColor(kGray+1);
+              l3->SetLineStyle(2);
+              l3->Draw();
+
+              TLine* l4 = new TLine(xmin, 1.10, xmax, 1.10);
+              l4->SetLineColor(kGray+2);
+              l4->SetLineStyle(2);
+              l4->Draw();
+
+              TLine* l5 = new TLine(xmin, 0.90, xmax, 0.90);
+              l5->SetLineColor(kGray+2);
+              l5->SetLineStyle(2);
+              l5->Draw();
+            }
+
+            // ---------- save stability plot ----------
+            const string pdfPathStab = string(outDir) + "/BAYES_stability_" + tag + ".pdf";
+
+            d->cd();
+            cstab->SaveAs(pdfPathStab.c_str());
+
+            {
+              string pngPathStab = pdfPathStab;
+              const size_t pos = pngPathStab.rfind(".pdf");
+              if (pos != string::npos) pngPathStab.replace(pos, 4, ".png");
+              cstab->SaveAs(pngPathStab.c_str());
+            }
+
+            delete cstab;
+            delete legStab;
+
             // ---------- cleanup ----------
             delete c;
             delete hT_plot;
@@ -869,7 +1070,7 @@ void unfold_embedding(const char* inputFile,
       // --- SVD unfolding ---
        else if (m == "SVD") {
           cout << "Doing SVD unfolding..." << endl;
-          //const int kRegValues[] = {2, 3, 4, 5, 6, 7, 8, 9};
+         // const int kRegValues[] = {6, 7, 8, 9};
           //const int kRegValues[] = {2, 3, 4, 5, 6};
           const int kRegValues[] = {3, 4, 5};
           const int nSVD = sizeof(kRegValues)/sizeof(kRegValues[0]);
@@ -1021,8 +1222,8 @@ void unfold_embedding(const char* inputFile,
           leg_svd->SetFillStyle(0);
           leg_svd->SetTextSize(0.035);
 
-          leg_svd->AddEntry(hT_plot_svd, "Truth (test)", "lp");
-          leg_svd->AddEntry(hM_truth_svd, "Measured (test)", "lp");
+          leg_svd->AddEntry(hT_plot_svd, "Truth (closure test)", "lp");
+          leg_svd->AddEntry(hM_truth_svd, "Measured (closure test)", "lp");
 
           for (int iSVD = 0; iSVD < nSVD; ++iSVD) {
             TH1D* w = unfoldedTruth[iSVD];
@@ -1033,7 +1234,7 @@ void unfold_embedding(const char* inputFile,
             w->SetLineColor(kUnfCols[iSVD]);
 
             w->Draw("E1 SAME");
-            leg_svd->AddEntry(w, Form("k_reg = %d ", kRegValues[iSVD]), "lp");
+            leg_svd->AddEntry(w, Form("#it{k}_{reg} = %d ", kRegValues[iSVD]), "lp");
           }
           leg_svd->Draw();
 
@@ -1074,7 +1275,7 @@ void unfold_embedding(const char* inputFile,
               firstRatio->GetYaxis()->SetRangeUser(0.4, 1.6);
 
               // bottom pad must carry x-axis title + labels
-              firstRatio->GetXaxis()->SetTitle("#it{p}_{T} (GeV)");
+              firstRatio->GetXaxis()->SetTitle("#it{p}_{T, reco}^{corr} (GeV/#it{c})");
               firstRatio->GetXaxis()->SetTitleSize(0.11);
               firstRatio->GetXaxis()->SetLabelSize(0.09);
               firstRatio->GetXaxis()->SetTitleOffset(1.05);
@@ -1166,6 +1367,7 @@ void unfold_embedding(const char* inputFile,
           delete hTrueTrain_ptHat[ip];
           delete hMeasTrain_ptHat[ip];
           delete hRespTrain_ptHat[ip];
+          delete hRespTest_ptHat[ip];
 
           delete hTrueTest_ptHat[ip];
           delete hMeasTest_ptHat[ip];

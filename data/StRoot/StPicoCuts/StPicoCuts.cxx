@@ -6,7 +6,7 @@ ClassImp(StPicoCuts)
 
 // _________________________________________________________
 StPicoCuts::StPicoCuts() : TNamed("PicoCutsBase", "PicoCutsBase"), 
-  mPicoDst(NULL), mEventStatMax(7), mBadRunListFileName("BadRunList_MB.list"), mVzMax(6.), mVzVpdVzMax(3.),
+  mPicoDst(NULL), mEventStatMax(7), mBadRunListFileName("BadRunList_MB.list"), mVzMin(-6.), mVzMax(6.), mVzVpdVzMax(3.),
   mNHitsFitMin(20), mRequireHFT(true), mNHitsFitnHitsMax(0.52) {
   
   // -- default constructor
@@ -21,7 +21,7 @@ StPicoCuts::StPicoCuts() : TNamed("PicoCutsBase", "PicoCutsBase"),
 
 // _________________________________________________________
 StPicoCuts::StPicoCuts(const Char_t *name) : TNamed(name, name), 
-  mPicoDst(NULL), mEventStatMax(7), mBadRunListFileName("BadRunList_MB.list"), mVzMax(6.), mVzVpdVzMax(3.),
+  mPicoDst(NULL), mEventStatMax(7), mBadRunListFileName("BadRunList_MB.list"), mVzMin(-6.), mVzMax(6.), mVzVpdVzMax(3.),
   mNHitsFitMin(20), mRequireHFT(true), mNHitsFitnHitsMax(0.52) {
   // -- constructor
 
@@ -87,16 +87,18 @@ bool StPicoCuts::isGoodEvent(StPicoDst const * const picoDst, int *aEventCuts) {
 
   // -- quick method without providing stats
   if (!aEventCuts) {
-		if(mRequireHFT){    
-			return (/*isGoodRunHFT(picoEvent) &&*/ isGoodTrigger(picoEvent) &&
-		    fabs(picoEvent->primaryVertex().z()) < mVzMax &&
-		    fabs(picoEvent->primaryVertex().z() - picoEvent->vzVpd()) < mVzVpdVzMax && picoEvent->refMult() > mRefMultMin && picoEvent->refMult() < mRefMultMax);
-		}
-		else{
-			return (/*isGoodRun(picoEvent) &&*/ isGoodTrigger(picoEvent) &&
-		    fabs(picoEvent->primaryVertex().z()) < mVzMax &&
-		    fabs(picoEvent->primaryVertex().z() - picoEvent->vzVpd()) < mVzVpdVzMax && picoEvent->refMult() > mRefMultMin && picoEvent->refMult() < mRefMultMax);
-		}
+    if(mRequireHFT){    
+    return (isGoodTrigger(picoEvent) &&
+        picoEvent->primaryVertex().z() > mVzMin && picoEvent->primaryVertex().z() < mVzMax &&
+        fabs(picoEvent->primaryVertex().z() - picoEvent->vzVpd()) < mVzVpdVzMax && 
+        picoEvent->refMult() > mRefMultMin && picoEvent->refMult() < mRefMultMax);
+      }
+      else{
+          return (isGoodTrigger(picoEvent) &&
+              picoEvent->primaryVertex().z() > mVzMin && picoEvent->primaryVertex().z() < mVzMax &&
+              fabs(picoEvent->primaryVertex().z() - picoEvent->vzVpd()) < mVzVpdVzMax && 
+              picoEvent->refMult() > mRefMultMin && picoEvent->refMult() < mRefMultMax);
+      }
   }
     
   // -- reset event cuts
@@ -126,8 +128,8 @@ bool StPicoCuts::isGoodEvent(StPicoDst const * const picoDst, int *aEventCuts) {
 
   // -- 3 - Vertex z outside cut window
   ++iCut;
-  if (fabs(picoEvent->primaryVertex().z()) >= mVzMax)
-    aEventCuts[iCut] = 1;
+  if (picoEvent->primaryVertex().z() <= mVzMin || picoEvent->primaryVertex().z() >= mVzMax)
+      aEventCuts[iCut] = 1;
 
   // -- 4 Vertex z - vertex_z(vpd) outside cut window
   ++iCut;
