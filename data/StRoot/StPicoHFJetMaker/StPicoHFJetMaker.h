@@ -70,7 +70,7 @@ public:
   virtual Int_t MakeJets();
   virtual void ClearJets(Option_t *opt);
   virtual Int_t FinishJets();
-  virtual Double_t GetTowerCalibEnergy(Int_t TowerId);
+  //virtual Double_t GetTowerCalibEnergy(Int_t TowerId);
   virtual Double_t vertexCorrectedEta(double eta, double vz);
   virtual Bool_t GetCaloTrackMomentum(StPicoDst *mPicoDst, TVector3 mPrimVtx);
 

@@ -371,7 +371,8 @@ for (int iTow = 0; iTow < 4800; iTow++) { // get btow info
   if (BadTowerMap[realtowID])
     continue;
 
-  double towE = GetTowerCalibEnergy(iTow + 1);
+  //double towE = GetTowerCalibEnergy(iTow + 1);
+  double towE = towHit->energy();
 
   if (doTowErrPlus == true)  towE = towE + 0.038 * towE;
   if (doTowErrMinus == true) towE = towE - 0.038 * towE;
@@ -602,23 +603,23 @@ for (unsigned int i = 0; i < fR.size(); i++) {
 
 
 //-----------------------------------------------------------------------------
-////Correct tower energy
+////Correct tower energy (not needed for the 2018 isobar data)
 //-----------------------------------------------------------------------------
-Double_t StPicoHFJetMaker::GetTowerCalibEnergy(Int_t TowerId) {
-  StPicoBTowHit *tower =
-      static_cast<StPicoBTowHit *>(mPicoDst->btowHit(TowerId - 1));
-  Float_t pedestal, rms;
-  Int_t status;
-  mTables->getPedestal(BTOW, TowerId, 0, pedestal, rms);
-  mTables->getStatus(BTOW, TowerId, status);
-  Double_t *TowerCoeff;
-  if (fRunNumber <= 15094020)
-    TowerCoeff = CPre;
-  else
-    TowerCoeff = CLowMidHigh;
-  Double_t calibEnergy = TowerCoeff[TowerId - 1] * (tower->adc() - pedestal);
-  return calibEnergy;
-}
+// Double_t StPicoHFJetMaker::GetTowerCalibEnergy(Int_t TowerId) {
+//   StPicoBTowHit *tower =
+//       static_cast<StPicoBTowHit *>(mPicoDst->btowHit(TowerId - 1));
+//   Float_t pedestal, rms;
+//   Int_t status;
+//   mTables->getPedestal(BTOW, TowerId, 0, pedestal, rms);
+//   mTables->getStatus(BTOW, TowerId, status);
+//   Double_t *TowerCoeff;
+//   if (fRunNumber <= 15094020)
+//     TowerCoeff = CPre;
+//   else
+//     TowerCoeff = CLowMidHigh;
+//   Double_t calibEnergy = TowerCoeff[TowerId - 1] * (tower->adc() - pedestal);
+//   return calibEnergy;
+// }
 
 //-----------------------------------------------------------------------------
 ////Correct tower eta for Vz position //// Not used anymore

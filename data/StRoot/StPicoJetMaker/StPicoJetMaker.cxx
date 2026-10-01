@@ -144,12 +144,45 @@ Int_t StPicoJetMaker::Make() {
         TH1D* hDca = (TH1D*)mOutList->FindObject("hTrackDca");
         TH1D* hNHits = (TH1D*)mOutList->FindObject("hTrackNHitsFit");
 
+        TH1D* hSDcaPos[6];
+        TH1D* hSDcaNeg[6];
+
+        const char* ptLabels[6] = {
+            "0p2_1",
+            "1_4",
+            "4_10",
+            "10_15",
+            "15_20",
+            "20_30"
+        };
+
+         for (int ipt = 0; ipt < 6; ++ipt) {
+            hSDcaPos[ipt] =
+                (TH1D*)mOutList->FindObject(Form("hSDcaPos_%s", ptLabels[ipt]));
+
+            hSDcaNeg[ipt] =
+                (TH1D*)mOutList->FindObject(Form("hSDcaNeg_%s", ptLabels[ipt]));
+        }
+
+        TH2D* hSDcaVsPtPos =
+            (TH2D*)mOutList->FindObject("hSDcaVsPtPos");
+
+        TH2D* hSDcaVsPtNeg =
+            (TH2D*)mOutList->FindObject("hSDcaVsPtNeg");
+
+        TH2D* hPrimaryPtVsGlobalPt =
+            (TH2D*)mOutList->FindObject("hPrimaryPtVsGlobalPt");
+
+        TH2D* hPtRatioVsSDca =
+            (TH2D*)mOutList->FindObject("hPtRatioVsSDca");
+
         for (unsigned short iTrack = 0; iTrack < nTracks; ++iTrack) {
           StPicoTrack *trk = mPicoDst->track(iTrack);
           if (!trk) continue;
 
-          double pTtrack = trk->pMom().Perp();
-          if (pTtrack > 30) return kStOK;  // keep your veto
+          //double pTtrack = trk->pMom().Perp();
+          //if (pTtrack > 30) return kStOK;  // keep your veto
+
 
           // Fill "full" distributions BEFORE your track cuts
           double dca = (mPrimVtx - trk->origin()).Mag();
@@ -160,6 +193,70 @@ Int_t StPicoJetMaker::Make() {
 
           // Now apply cuts for jet constituents
           if (!mPicoCuts->isGoodPrimaryTrack(trk)) continue;
+
+
+
+          // ==========================================================
+          // signed-DCA QA -- NO CUT APPLIED
+          // ==========================================================
+
+          const double pTtrack = trk->pMom().Perp();
+
+          const TVector3 gMom = trk->gMom();
+          const double gPt = gMom.Perp();
+
+          if (gPt > 0.0) {
+
+              // Global DCA vector from primary vertex to track origin
+              const TVector3 gDca = trk->origin() - mPrimVtx;
+
+              const double sDca =
+                    (gMom.X() / gPt) * gDca.Y()
+                  - (gMom.Y() / gPt) * gDca.X();
+
+              const int charge = trk->charge();
+
+
+              // primary pT versus global pT
+              if (hPrimaryPtVsGlobalPt)
+                  hPrimaryPtVsGlobalPt->Fill(gPt, pTtrack);
+
+
+              // primary/global pT ratio versus signed DCA
+              if (hPtRatioVsSDca)
+                  hPtRatioVsSDca->Fill(sDca, pTtrack / gPt);
+
+
+              // sDCA versus primary pT
+              if (charge > 0 && hSDcaVsPtPos)
+                  hSDcaVsPtPos->Fill(pTtrack, sDca);
+
+              if (charge < 0 && hSDcaVsPtNeg)
+                  hSDcaVsPtNeg->Fill(pTtrack, sDca);
+
+
+              // pT-bin index matching Fig. 12
+              int ipt = -1;
+
+              if      (pTtrack >= 0.2 && pTtrack <  1.0) ipt = 0;
+              else if (pTtrack >= 1.0 && pTtrack <  4.0) ipt = 1;
+              else if (pTtrack >= 4.0 && pTtrack < 10.0) ipt = 2;
+              else if (pTtrack >= 10.0 && pTtrack < 15.0) ipt = 3;
+              else if (pTtrack >= 15.0 && pTtrack < 20.0) ipt = 4;
+              else if (pTtrack >= 20.0 && pTtrack < 30.0) ipt = 5;
+
+              if (ipt >= 0) {
+
+                  if (charge > 0 && hSDcaPos[ipt])
+                      hSDcaPos[ipt]->Fill(sDca);
+
+                  if (charge < 0 && hSDcaNeg[ipt])
+                      hSDcaNeg[ipt]->Fill(sDca);
+              }
+          }
+
+
+          // NO sDCA rejection here
 
           mIdxPicoParticles.push_back(iTrack);
         }
@@ -289,6 +386,65 @@ void StPicoJetMaker::initializeEventStats() {
                          15167014)); // 15076101−15167014
   mOutList->Add(new TH1D("hTrackDca", "Tracks DCA (to PV);DCA (cm);counts", 400, 0.0, 5.0));
   mOutList->Add(new TH1D("hTrackNHitsFit", "Tracks nHitsFit;nHitsFit;counts", 50, 0, 50));
+
+
+  // ---------------------------------------------------------
+  // signed-DCA QA
+  // ---------------------------------------------------------
+
+  const char* ptLabels[6] = {
+      "0p2_1",
+      "1_4",
+      "4_10",
+      "10_15",
+      "15_20",
+      "20_30"
+  };
+
+  for (int ipt = 0; ipt < 6; ++ipt) {
+
+      mOutList->Add(new TH1D(
+          Form("hSDcaPos_%s", ptLabels[ipt]),
+          Form("Positive tracks, p_{T} bin %s;sDCA (cm);counts",
+              ptLabels[ipt]),
+          400, -5.0, 5.0));
+
+      mOutList->Add(new TH1D(
+          Form("hSDcaNeg_%s", ptLabels[ipt]),
+          Form("Negative tracks, p_{T} bin %s;sDCA (cm);counts",
+              ptLabels[ipt]),
+          400, -5.0, 5.0));
+  }
+
+
+  // full 2D distributions
+  mOutList->Add(new TH2D(
+      "hSDcaVsPtPos",
+      "Positive tracks;primary p_{T} (GeV/c);sDCA (cm)",
+      150, 0.0, 40.0,
+      400, -5.0, 5.0));
+
+  mOutList->Add(new TH2D(
+      "hSDcaVsPtNeg",
+      "Negative tracks;primary p_{T} (GeV/c);sDCA (cm)",
+      150, 0.0, 40.0,
+      400, -5.0, 5.0));
+
+  // Primary pT versus global pT
+  mOutList->Add(new TH2D(
+      "hPrimaryPtVsGlobalPt",
+      "Accepted tracks;global p_{T} (GeV/c);primary p_{T} (GeV/c)",
+      200, 0.0, 40.0,
+      200, 0.0, 40.0));
+
+
+  // Primary/global pT ratio versus signed DCA
+  mOutList->Add(new TH2D(
+      "hPtRatioVsSDca",
+      "Accepted tracks;sDCA (cm);p_{T}^{prim}/p_{T}^{glob}",
+      400, -5.0, 5.0,
+      200, 0.0, 10.0));    
+
 
 }
 

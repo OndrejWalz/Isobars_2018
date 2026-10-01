@@ -174,7 +174,7 @@ void divideJetSpectra(TString fileNum       = "hists_data_Ru.root",
     centralities.push_back("PERI_60_80");
 
     std::vector<int> ptLeads;
-    //ptLeads.push_back(0);
+    ptLeads.push_back(0);
     ptLeads.push_back(5);
     ptLeads.push_back(7);
     //ptLeads.push_back(9);
@@ -190,6 +190,24 @@ void divideJetSpectra(TString fileNum       = "hists_data_Ru.root",
     markers.push_back(21);
     markers.push_back(22);
     markers.push_back(23);
+    // ──────────────────────────────────────────
+    // Ncoll normalization values
+    // ──────────────────────────────────────────
+
+
+    // <Ncoll> per centrality, same order as `centralities` above.
+    // Set both to empty {} to disable Ncoll normalization entirely.
+    std::vector<double> ncollNum; // Ru+Ru
+    ncollNum.push_back(356.0);   // 0-10%
+    ncollNum.push_back(117.7);   // 20-40%
+    ncollNum.push_back(11.85);    // 60-80%
+
+    std::vector<double> ncollDen; // Zr+Zr
+    ncollDen.push_back(351.5);
+    ncollDen.push_back(111.2);
+    ncollDen.push_back(10.71);
+
+    bool doNcollNorm = !ncollNum.empty() && !ncollDen.empty();
 
     // ──────────────────────────────────────────
     // 3.  Output file
@@ -300,8 +318,16 @@ void divideJetSpectra(TString fileNum       = "hists_data_Ru.root",
                 // Per-event normalization: turn raw counts into a per-event yield
                 // BEFORE dividing, so the ratio reflects relative production rate
                 // between the two species, not just spectrum shape.
-                hRatioNum->Scale(1.0 / nEventsNum);
-                hRatioDen->Scale(1.0 / nEventsDen);
+                          // Per-event (and optionally per-Ncoll) normalization, applied
+                // BEFORE dividing, so the ratio reflects relative yield.
+                double scaleNum = 1.0 / nEventsNum;
+                double scaleDen = 1.0 / nEventsDen;
+                if (doNcollNorm) {
+                    scaleNum /= ncollNum[ic];
+                    scaleDen /= ncollDen[ic];
+                }
+                hRatioNum->Scale(scaleNum);
+                hRatioDen->Scale(scaleDen);
 
                 hRatioNum->Divide(hRatioDen);
 
@@ -381,7 +407,9 @@ void divideJetSpectra(TString fileNum       = "hists_data_Ru.root",
                 h->GetXaxis()->SetRangeUser(0.0, h->GetXaxis()->GetXmax());
                 h->GetXaxis()->SetTitle("#it{p}_{T, reco}^{corr} (GeV/#it{c})");
                 h->GetXaxis()->SetTitleSize(0.045);
-                h->GetYaxis()->SetTitle(Form("[1/N_{evt} dN/d#it{p}_{T}]_{Ru+Ru} / [1/N_{evt} dN/d#it{p}_{T}]_{Zr+Zr}"));
+                h->GetYaxis()->SetTitle(doNcollNorm
+                    ? "[1/(N_{evt}#timesN_{coll}) dN/d#it{p}_{T}]_{Ru+Ru} / [1/(N_{evt}#timesN_{coll}) dN/d#it{p}_{T}]_{Zr+Zr}"
+                    : "[1/N_{evt} dN/d#it{p}_{T}]_{Ru+Ru} / [1/N_{evt} dN/d#it{p}_{T}]_{Zr+Zr}");
                 h->GetYaxis()->SetTitleSize(0.045);
                 h->SetTitle("");
 

@@ -25,6 +25,8 @@ void loadSharedHFLibraries() {
   gSystem->Load("StPicoCuts");
   gSystem->Load("StPicoJetMaker");
   gSystem->Load("StRefMultCorr");
+  gSystem->Load("StPicoPrescales");
+
   gSystem->Load("St_db_Maker");
   gSystem->Load("StDaqLib");
   gSystem->Load("StEmcRawMaker");
@@ -39,4 +41,9 @@ void loadSharedHFLibraries() {
 
   // -->>> ADD your own library/class HERE
   gSystem->Load("StPicoHFJetMaker"); // analysis maker should be last
+  gSystem->Load("StPicoTowerTest");
+
+
+
+
 }
