@@ -24,7 +24,6 @@
 #include "TSystem.h"
 #include "TEnv.h"
 
-//#include "../StPicoPrescales/StPicoPrescales.h"
 #include "StRoot/StRefMultCorr/StRefMultCorr.h"
 #include "StEmcADCtoEMaker/StBemcData.h"
 #include "StEmcADCtoEMaker/StEmcADCtoEMaker.h"
@@ -40,6 +39,7 @@
 #include "TH2F.h"
 #include "TH3D.h"
 #include "TFile.h"
+#include "TDirectory.h"
 #include "StEvent/StDcaGeometry.h"
 //
 #include <bitset>
@@ -52,98 +52,83 @@
 #include <sstream>
 #include <iomanip>
 #include <cmath>
-using namespace std; 
+using namespace std;
 
+//-------------------------------------
+// >>> EDIT THIS: absolute path of the run list (one run number per line) <<<
+// Used when $RUNLIST is not set. Find it with:  find /pwg/walz -iname 'isobars_2018.txt'
+static const char* const kRunListPath = "/gpfs/mnt/gpfs01/star/pwg/walz/Isobars2018/data/Isobars_2018.txt";
 //-------------------------------------
 
 ClassImp(StPicoTowerTest)
 
-  StPicoTowerTest::StPicoTowerTest(char const * name, char const * outName,StPicoDstMaker* picoDstMaker,StRefMultCorr* grefmultCorrUtil,int pYear): 
+  StPicoTowerTest::StPicoTowerTest(char const * name, char const * outName,StPicoDstMaker* picoDstMaker,StRefMultCorr* grefmultCorrUtil,int pYear):
     StMaker(name),mPicoDstMaker(picoDstMaker), mGRefMultCorrUtil(grefmultCorrUtil),
     mOutFileName(outName),mOutputFile(NULL), mChain(NULL), mEventCounter(0),mYear(pYear){}
 
 Int_t StPicoTowerTest::Init()
 {
-  //Prescales = new StPicoPrescales(mycuts::prescalesFilesDirectoryName);
-   mEmcPosition = new StEmcPosition();
+  mEmcPosition = new StEmcPosition();
 
-   std::string outputFile = "RunIndexTable.txt";
-  // mPrescales->createRunIndexFile(outputFile);
-   mOutputFile = new TFile(mOutFileName.Data(), "RECREATE");
-   mOutputFile->cd();
+  mOutputFile = new TFile(mOutFileName.Data(), "RECREATE");
+  mOutputFile->cd();
 
-//2016:
-//16337009
-//17315033
-
-//2017:
-//17319004
-//18317017
-
-//Int_t Run_min = 16337009;
-//Int_t Run_max = 17315034;
-//Int_t NOfRuns = Run_max-Run_min +1;
-
-  //int nRuns = mPrescales->numberOfRuns();
-  //mRunIndexMap = new StRunIndexMap("run_list_isobars2018.txt");  // your file, one run per line
-  //int nRuns = mRunIndexMap->numberOfRuns();
-
-    {
-    std::ifstream runs("Isobars_2018.txt");
-    if (!runs.is_open()) {
-      LOG_ERROR << "StPicoTowerTest - Cannot find run list file!" << endm;
-    } else {
-      unsigned int run;
-      int idx = 1;                  // start at 1, as you asked
-      while (runs >> run) {
-        mRunIndexMap[run] = idx++;
-      }
-      runs.close();
+  // ---- run list: $RUNLIST if set, otherwise try the usual locations ----
+  {
+    // Priority: $RUNLIST (override) > hardcoded kRunListPath
+    std::string runListPath = gSystem->Getenv("RUNLIST") ? gSystem->Getenv("RUNLIST") : kRunListPath;
+    std::ifstream runs(runListPath.c_str());
+    if (runListPath.empty() || !runs.is_open()) {
+      LOG_ERROR << "StPicoTowerTest - Cannot find run list file." << endm;
+      LOG_ERROR << "  working directory : " << gSystem->WorkingDirectory() << endm;
+      LOG_ERROR << "  tried             : " << runListPath << endm;
+      LOG_ERROR << "  Fix: edit kRunListPath in StPicoTowerTest.cxx (and rebuild) or export RUNLIST=..." << endm;
+      return kStFatal;   // stop now instead of processing millions of events for nothing
     }
+    unsigned int run;
+    int idx = 1;
+    while (runs >> run) {
+      mRunIndexMap[run] = idx++;
+    }
+    runs.close();
+    LOG_INFO << "StPicoTowerTest - run list " << runListPath << " : " << mRunIndexMap.size() << " runs" << endm;
   }
   int nRuns = mRunIndexMap.size();
+  if (nRuns == 0) {
+    LOG_ERROR << "StPicoTowerTest - run list is empty!" << endm;
+    return kStFatal;
+  }
 
   MapTower_RunID_NHits_TowerID = new TH2D("MapTower_RunID_NHits_TowerID","MapTower_RunID_NHits_TowerID;runIndex;towerID", nRuns+1,0,nRuns+1,4800,0,4800);
   MapTower_RunID_Energy_TowerID = new TH2D("MapTower_RunID_Energy_TowerID","MapTower_RunID_Energy_TowerID;runIndex;towerID", nRuns+1,0,nRuns+1,4800,0,4800);
-  MapTower_RunID_NEvents = new TH1D("MapTower_RunID_NEvents", "MapTower_RunID_NEvents", nRuns+1,0,nRuns+1); // 80 x 60 bins
+  MapTower_RunID_NEvents = new TH1D("MapTower_RunID_NEvents", "MapTower_RunID_NEvents", nRuns+1,0,nRuns+1);
   vtxr = new TH2D("vtxr",";PVtx.x() [cm]; PVtx.y() [cm]",100,-3,3,100,-3,3);
- 
+
   hRunPxl1 = new TH2D("hRunPxl1", "hRunPxl1", nRuns+1,0,nRuns+1,1500,0,1500);
   hRunPxl2 = new TH2D("hRunPxl2", "hRunPxl2", nRuns+1,0,nRuns+1,1500,0,1500);
   hRunIst = new TH2D("hRunIst", "hRunIst", nRuns+1,0,nRuns+1,1500,0,1500);
   hRunSsd = new TH2D("hRunSsd", "hRunSsd", nRuns+1,0,nRuns+1,1500,0,1500);
 
-
- 
-   mOutputFile->cd();
+  mOutputFile->cd();
 
   StMaker* maker = GetMaker("Eread");
-  if (maker) {
-    cout << "Maker is valid!" << endl;
-  } else {
-    cout << "Maker is invalid!" << endl;
+  cout << (maker ? "Maker is valid!" : "Maker is invalid!") << endl;
+  mADCtoEMaker = dynamic_cast<StEmcADCtoEMaker*>(maker);
+  cout << (mADCtoEMaker ? "mADCtoEMaker is valid!" : "mADCtoEMaker is invalid!") << endl;
+  if (!mADCtoEMaker) {
+    LOG_ERROR << "StPicoTowerTest - no StEmcADCtoEMaker named Eread" << endm;
+    return kStFatal;
   }
-    mADCtoEMaker = dynamic_cast<StEmcADCtoEMaker*>(GetMaker("Eread"));
-    if (mADCtoEMaker) {
-    cout << "mADCtoEMaker is valid!" << endl;
-  } else {
-    cout << "mADCtoEMaker is invalid!" << endl;
-  }
-  assert(mADCtoEMaker);
   mTables = mADCtoEMaker->getBemcData()->getTables();
-
-  // -------------- USER VARIABLES -------------------------
-  //mGRefMultCorrUtil = new StRefMultCorr("grefmult");
 
   return kStOK;
 }
 //-----------------------------------------------------------------------------
 StPicoTowerTest::~StPicoTowerTest()
 {
-  /*  */
-  delete mGRefMultCorrUtil;
+  // mGRefMultCorrUtil is not owned by this maker (it is created outside and may be nullptr),
+  // so it is NOT deleted here.
   delete mEmcPosition;
-
 }
 
 //-----------------------------------------------------------------------------
@@ -151,181 +136,139 @@ Int_t StPicoTowerTest::Finish()
 {
   LOG_INFO << " StPicoTowerTest - writing data and closing output file " <<endm;
 
+  if (!mOutputFile) return kStOK;
   mOutputFile->cd();
 
   vtxr->Write();
   MapTower_RunID_NHits_TowerID->Write();
   MapTower_RunID_Energy_TowerID->Write();
   MapTower_RunID_NEvents->Write();
-  
+
   hRunPxl1->Write();
-hRunPxl2->Write();
-hRunIst ->Write();
-hRunSsd ->Write(); 
+  hRunPxl2->Write();
+  hRunIst ->Write();
+  hRunSsd ->Write();
 
   mOutputFile->Close();
-  //delete mPrescales;
-  //delete mRunIndexMap;
   delete mOutputFile;
   mOutputFile = nullptr;
-// delete vtxr;
-// delete MapTower_RunID_NHits_TowerID;
-// delete MapTower_RunID_Energy_TowerID;
-// delete MapTower_RunID_NEvents;
-// delete hRunPxl1;
-// delete hRunPxl2;
-// delete hRunIst;
-// delete hRunSsd;
-
 
   return kStOK;
 }
 //-----------------------------------------------------------------------------
 Int_t StPicoTowerTest::Make()
 {
-   
+  ++mEventCounter;
+
   if (!mPicoDstMaker)
-    {
-      LOG_WARN << " StPicoTowerTest - No PicoDstMaker! Skip! " << endm;
-      return kStWarn;
-    }
+  {
+    LOG_WARN << " StPicoTowerTest - No PicoDstMaker! Skip! " << endm;
+    return kStWarn;
+  }
 
-    picoDst = mPicoDstMaker->picoDst();
+  picoDst = mPicoDstMaker->picoDst();
 
-    if (!picoDst)
-    {
-      LOG_WARN << "StPicoTowerTest - No PicoDst! Skip! " << endm;
-      return kStWarn;
-    }
+  if (!picoDst)
+  {
+    LOG_WARN << "StPicoTowerTest - No PicoDst! Skip! " << endm;
+    return kStWarn;
+  }
 
-
-
-  StThreeVectorF pVtx(-999.,-999.,-999.);
   StPicoEvent *event = (StPicoEvent *)picoDst->event();
+  if (!event)
+  {
+    LOG_WARN << "StPicoTowerTest - No StPicoEvent (bad read?)! Skip! " << endm;
+    return kStWarn;
+  }
 
-  if(!(isGoodEvent()))//minBias trigger requires
+  // Periodic save so a crash/stall does not lose everything (overwrites previous cycle)
+  if (mOutputFile && mEventCounter % 50000 == 0) {
+    mOutputFile->Write(0, TObject::kOverwrite);
+  }
+
+  if(!(isGoodEvent()))   // minBias trigger + vertex cuts
   {
     return kStOK;
   }
-  
 
-  //   LOG_INFO << "mGRefMultCorrUtil = " << mGRefMultCorrUtil << endm;
-  // if(!mGRefMultCorrUtil) {
-  //   LOG_WARN << " No mGRefMultCorrUtil! Skip! " << endl;
-  //   return kStWarn;
-  // }
-
-  //mGRefMultCorrUtil->init(picoDst->event()->runId());
-  //mGRefMultCorrUtil->initEvent(picoDst->event()->grefMult(),pVtx.z(),picoDst->event()->ZDCx()) ;
-
-  //int centrality  = mGRefMultCorrUtil->getCentralityBin9();
-  /*
-  if(centrality<0) {
-    //LOG_WARN << "not minBias sample!" << endl;
-    return kStOK;
-  }
-  */
-  pVtx = StThreeVectorF(event->primaryVertex().x(),event->primaryVertex().y(),event->primaryVertex().z());
+  StThreeVectorF pVtx(event->primaryVertex().x(), event->primaryVertex().y(), event->primaryVertex().z());
   vtxr->Fill(pVtx.x(),pVtx.y());
 
-  //int runIndex = mPrescales->runIndex(picoDst->event()->runId());
-    int runIdx = this->runIndex(picoDst->event()->runId());
-    if (runIdx < 0) return kStOK;
-    MapTower_RunID_NEvents->Fill(runIdx);
-
-//cout << runIndex << picoDst->event()->runId() << endl;
-       ///   StEmcPosition* mEmcPosition = new StEmcPosition();
-      //loop over towers
-      for (int iTow = 0; iTow < 4800; iTow++){ //get btow info
-        
-          StPicoBTowHit *towHit = picoDst->btowHit(iTow);
-          //vector<int> ids = {0,0,0,0,0,0,0,0,0}; 
-          if (!towHit) continue; 
-          //if (!towHit || towHit->isBad()) continue; //if the tower is bad or missing info
-          int realtowID = towHit->numericIndex2SoftId(iTow);
-
-          Float_t pedestal, rms;
-          Int_t status;
-          mTables->getPedestal(BTOW, iTow+1, 0, pedestal, rms);
-          mTables->getStatus(BTOW, iTow+1, status);  
-          Double_t *TowerCoeff;
-
-           //Correct the eta of the tower for the vertex position
-           //Because the loaded eta is w.r.t. the center of the TPC, but the vertex do not have to be in the center
-           StThreeVectorF towerPosition = mEmcPosition->getPosFromVertex(StThreeVectorF(event->primaryVertex().x(),event->primaryVertex().y(),event->primaryVertex().z()), realtowID);
-           float Toweta = towerPosition.pseudoRapidity();
-          // float Towphi = towerPosition.phi();
-
-           double energy = towHit->energy();
-           
-           ///////////////////
-           
-           //Loading of the tower
-
-  //Tower coefficients for the different runs, parameters are saved in BemcNewCalib.h
-  if(picoDst->event()->runId() <= 15094020) TowerCoeff = CPre;
-  else TowerCoeff = CLowMidHigh;
-
-  //Calculation of the calibrated energy E=C*(ADC-Pedestal)
-  Double_t calibEnergy = TowerCoeff[realtowID-1]*(towHit->adc() - pedestal); //softID
-
-           
-           energy = calibEnergy;
-           
-           ///////////////////
-
-          double E_T = energy/cosh(Toweta);           
-          // cout << "E_T: " << E_T << endl;
-         ///// if(iTow==69||iTow==169||iTow==669) E_T = 999999999;
-          if(E_T>0.2){
-             MapTower_RunID_NHits_TowerID->Fill(runIdx,iTow);
-             MapTower_RunID_Energy_TowerID->Fill(runIdx, iTow, energy);
-          }
-  
+  // ---- per-run caches (function-local statics: one maker instance per process) ----
+  // Run-index lookup and BEMC pedestals only change when the run changes, so they are
+  // recomputed once per run instead of once per event (pedestals: 4800 DB lookups/event before).
+  static unsigned int sRun    = 0;
+  static int          sRunIdx = -1;
+  static Float_t      sPed[4800];
+  const unsigned int runId = event->runId();
+  if (runId != sRun) {
+    sRun    = runId;
+    sRunIdx = this->runIndex(runId);
+    if (sRunIdx >= 0) {
+      Float_t rms;
+      for (int i = 0; i < 4800; ++i) {
+        sPed[i] = 0;
+        mTables->getPedestal(BTOW, i+1, 0, sPed[i], rms);
       }
-int pxl1 = 0;//(map >> 0) & 0x1;       // bit 0
-int pxl2 = 0;//(map >> 1) & 0x3;       // bits 1–2
-int ist  = 0;//(map >> 3) & 0x3;       // bits 3–4
-int ssd  = 0;//(map >> 5) & 0x3;       // bits 5–6
-    //HFT
-      UInt_t nTracks = picoDst->numberOfTracks();
-    for (unsigned short iTrack = 0; iTrack < nTracks; ++iTrack){
-    
-    
-            //The i-th track is loaded
-            StPicoTrack* trk = picoDst->track(iTrack);
+    }
+  }
+  const int runIdx = sRunIdx;
+  if (runIdx < 0) return kStOK;
+  MapTower_RunID_NEvents->Fill(runIdx);
 
-            //Check if the track exists
-            if(!trk) continue;
-            
-            
-    	UInt_t map = trk->hftHitsMap();
+  // Tower coefficients for the different runs, parameters are saved in BemcNewCalib.h
+  const Double_t *TowerCoeff = (runId <= 15094020) ? CPre : CLowMidHigh;
 
-pxl1 += (map >> 0) & 0x1;       // bit 0
-pxl2 += (map >> 1) & 0x3;       // bits 1–2
-ist  += (map >> 3) & 0x3;       // bits 3–4
-ssd  += (map >> 5) & 0x3;       // bits 5–6
+  // loop over towers
+  for (int iTow = 0; iTow < 4800; iTow++){
+    StPicoBTowHit *towHit = picoDst->btowHit(iTow);
+    if (!towHit) continue;
 
+    const int realtowID = towHit->numericIndex2SoftId(iTow);
+    if (realtowID < 1 || realtowID > 4800) continue;   // guard the TowerCoeff index
 
-    }  
- //  std::vector<std::bitset<4800>> goodTowerMap(2989);
-hRunPxl1->Fill(runIdx, pxl1);
-hRunPxl2->Fill(runIdx, pxl2);
-hRunIst ->Fill(runIdx, ist);
-hRunSsd ->Fill(runIdx, ssd);   
+    // Calibrated energy E = C*(ADC-Pedestal)
+    const Double_t energy = TowerCoeff[realtowID-1]*(towHit->adc() - sPed[iTow]);
 
-pxl1 = 0;
-pxl2 = 0;
-ist = 0;
-ssd = 0;
+    // E_T = E/cosh(eta) <= E, so E <= ETmin can never pass E_T > 0.2.
+    // Skip before the (expensive) position calculation. Towers with bad status are
+    // deliberately NOT skipped: this is a QA study that needs to see them.
+    if (energy <= 0.2) continue;
+
+    // Eta corrected for the vertex position (tabulated eta is w.r.t. TPC centre)
+    StThreeVectorF towerPosition = mEmcPosition->getPosFromVertex(pVtx, realtowID);
+    const double E_T = energy/cosh(towerPosition.pseudoRapidity());
+    if (E_T > 0.2){
+      MapTower_RunID_NHits_TowerID->Fill(runIdx, iTow);
+      MapTower_RunID_Energy_TowerID->Fill(runIdx, iTow, energy);
+    }
+  }
+
+  // HFT hit counts
+  int pxl1 = 0, pxl2 = 0, ist = 0, ssd = 0;
+  UInt_t nTracks = picoDst->numberOfTracks();
+  for (unsigned short iTrack = 0; iTrack < nTracks; ++iTrack){
+    StPicoTrack* trk = picoDst->track(iTrack);
+    if(!trk) continue;
+
+    UInt_t map = trk->hftHitsMap();
+    pxl1 += (map >> 0) & 0x1;       // bit 0
+    pxl2 += (map >> 1) & 0x3;       // bits 1-2
+    ist  += (map >> 3) & 0x3;       // bits 3-4
+    ssd  += (map >> 5) & 0x3;       // bits 5-6
+  }
+  hRunPxl1->Fill(runIdx, pxl1);
+  hRunPxl2->Fill(runIdx, pxl2);
+  hRunIst ->Fill(runIdx, ist);
+  hRunSsd ->Fill(runIdx, ssd);
 
   return kStOK;
 }
 //-----------------------------------------------------------------------------
 
-//----------------------------------------------------------------------------- 
+//-----------------------------------------------------------------------------
 //Correct tower eta for Vz position
-//----------------------------------------------------------------------------- 
+//-----------------------------------------------------------------------------
 Double_t StPicoTowerTest::vertexCorrectedEta(double eta, double vz) {
     double tower_theta = 2.0 * atan(exp(-eta));
     double z = 0.0;
@@ -336,31 +279,26 @@ Double_t StPicoTowerTest::vertexCorrectedEta(double eta, double vz) {
     return eta_corr;
 }
 
-
-
 bool StPicoTowerTest::isGoodEvent()
 {
   StPicoEvent *event = (StPicoEvent *)picoDst->event();
-  // return (event->triggerWord() & mycuts::triggerWord) &&
-  //cout << "Test: " << isMBTrigger(mYear) << endl;
   return (isMBTrigger(mYear) &&
       sqrt(event->primaryVertex().x()*event->primaryVertex().x()+event->primaryVertex().y()*event->primaryVertex().y()) < mycuts::vz &&
       fabs(event->primaryVertex().z()) < mycuts::vz &&
       fabs(event->primaryVertex().z() - event->vzVpd()) < mycuts::vzVpdVz);
-  //  return event->triggerWord() & mycuts::triggerWord;
 }
+
 bool StPicoTowerTest::isMBTrigger(int mYear)
 {
-
   const std::set<int>* mbTriggers = nullptr;
 
   if(mYear ==2016){
       static const std::set<int> mbTriggers2016 = {
         520001, 520011, 520021, 520031, 520041, 520051,           // VPDMB-5-p-sst
-        570002, 570001,                                           // VPDMB-5-nosst  (production 2, nosst stream), VPDMB-5-sst (production 2, sst stream )
+        570002, 570001,                                           // VPDMB-5-nosst / VPDMB-5-sst (production 2)
         520201, 520211, 520221, 520231, 520241, 520251, 520261,   // BHT1*VPDMB-10
         520203,                                                   // BHT3
-        520101, 520111, 520121, 520131, 520141,                   // central-5  
+        520101, 520111, 520121, 520131, 520141,                   // central-5
         520007, 520017, 520027, 520037,                           // vpdmb-10
         520003, 520013, 520023, 520033, 520043,                   // VPDMB-5
         520802, 520812, 520822, 520832, 520842,                   // VPDMB-5-p-hlt
@@ -369,13 +307,10 @@ bool StPicoTowerTest::isMBTrigger(int mYear)
       mbTriggers = &mbTriggers2016;
   }
 
-  if(mYear ==2014){  
+  if(mYear ==2014){
       static const std::set<int> mbTriggers2014 = {
-      450050, //VPDMB-5-p-nobsmd-hlt
-      450060, //VPDMB-5-p-nobsmd-hlt
-      450005, 
-      450015, 
-      450025,
+      450050, 450060,   //VPDMB-5-p-nobsmd-hlt
+      450005, 450015, 450025,
       450201, //BHT1*VPDMB-30
       450202, //BHT2*VPDMB-30
       450203, //BHT3
@@ -384,10 +319,10 @@ bool StPicoTowerTest::isMBTrigger(int mYear)
       };
       mbTriggers = &mbTriggers2014;
   }
-  
-  if(mYear ==2017){  
+
+  if(mYear ==2017){
       static const std::set<int> mbTriggers2017 = {
-      570214, //BHT1*VPD30 
+      570214, //BHT1*VPD30
       570204, //BHT1*VPD100
       570205, 570215, //BHT2*BBCMB
       570201, //BHT3
@@ -396,12 +331,10 @@ bool StPicoTowerTest::isMBTrigger(int mYear)
       570403, //JP1*VPDMB30
       570401, //JP2
       570402, //JP2*L2JetHigh
-      570205, //BHT2*BBCMB
-      570215, //BHT2*BBCMB
       };
       mbTriggers = &mbTriggers2017;
   }
-  if(mYear ==2018){  
+  if(mYear ==2018){
       static const std::set<int> mbTriggers2018 = {
       600001, // VPDMB-30 run 2018
       600011,
@@ -411,36 +344,22 @@ bool StPicoTowerTest::isMBTrigger(int mYear)
       600213
       };
       mbTriggers = &mbTriggers2018;
-  }   // <-- close the if(2018) here
+  }
+
+  if (!mbTriggers) return false;   // unknown year: previously a null-pointer dereference
 
   StPicoEvent* event = static_cast<StPicoEvent*>(picoDst->event());
   return std::any_of(mbTriggers->begin(), mbTriggers->end(), [&](int trigger) { return event->isTrigger(trigger); });
-}   // <-- closes isMBTrigger
+}
 //-----------------------------------------------------------------------------
 bool StPicoTowerTest::isGoodTrack(StPicoTrack const * const trk) const
 {
-  // Require at least one hit on every layer of PXL and IST.
-  // It is done here for tests on the preview II data.
-  // The new StPicoTrack which is used in official production has a method to check this
-  //return trk->gPt() > mycuts::minPt && trk->nHitsFit() >= mycuts::nHitsFit && trk->isHFTTrack();
-
   bool HFTCondition = (trk->hasPxl1Hit() && trk->hasPxl2Hit()) && (trk->hasSstHit() || trk->hasIstHit());
   return trk->gPt() > mycuts::minPt && trk->nHitsFit() >= mycuts::nHitsFit && HFTCondition;
-  //return  trk->nHitsFit() >= mycuts::nHitsFit;
 }
-
 
 int StPicoTowerTest::runIndex(unsigned int run) const
 {
   auto it = mRunIndexMap.find(run);
   return (it == mRunIndexMap.end()) ? -1 : it->second;
 }
-
-
-
-
-
-
-
-
-

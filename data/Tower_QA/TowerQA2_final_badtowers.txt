@@ -1,0 +1,2 @@
+# final bad towers: bad (dead, hot, <nHits> 3sigma or <E> 3sigma) in more than 10 of the 288 kept runs
+# towerID nDead nHot nSigNHits nSigE nBadTotal
