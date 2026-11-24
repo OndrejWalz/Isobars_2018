@@ -3,9 +3,9 @@
 # The list must contain xrootd URLs (root://...), one picoDst per line.
 
 # >>> EDIT THIS: default file list (relative to the project root); an argument overrides it <<<
-fileList="${1:-filelists/isobars_2018_1.list}"
-baseFolder="$PWD"
-case "$fileList" in /*) listOfFiles="$fileList" ;; *) listOfFiles="$PWD/${fileList}" ;; esac   # absolute or project-relative
+fileList="${1:-filelists/isobars_2018_after_cent1.list}"
+baseFolder="$PWD/../"
+case "$fileList" in /*) listOfFiles="$fileList" ;; *) listOfFiles="$PWD/../${fileList}" ;; esac   # absolute or project-relative
 if [[ ! -f "$listOfFiles" ]]; then
     echo "File list not found (or not a regular file): $listOfFiles"
     exit 1

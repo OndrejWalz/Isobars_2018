@@ -19,6 +19,8 @@ namespace mycuts
    //event
    UShort_t const triggerWord = 0x1F; //first five bits see http://rnc.lbl.gov/~xdong/SoftHadron/picoDst.html
    float const vz = 6.0;// cm.
+   float const vzMin = -35.0; // cm
+   float const vzMax =  25.0; // cm
    float const vzVpdVz = 3.0; // 3 cm.
 
    float const vr = 2.0; // cm.

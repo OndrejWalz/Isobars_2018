@@ -21,7 +21,10 @@ namespace mycuts
    //event
    extern UShort_t const triggerWord;
    extern float const vz;
+   extern float const vzMin;
+   extern float const vzMax;
    extern float const vzVpdVz;
+   extern float const vr;
 
    //tracking
    extern int const nHitsFit;

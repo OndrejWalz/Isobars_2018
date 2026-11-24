@@ -117,6 +117,7 @@ class StPicoTowerTest : public StMaker
 
     TH2D *vtxr;
     TH2D* MapTower_RunID_NHits_TowerID;
+    TH2D* MapTower_RunID_Energy_TowerID_energy; 
     TH2D* MapTower_RunID_Energy_TowerID;
     TH1D *MapTower_RunID_NEvents;
     TH2D *hRunPxl1;

@@ -100,7 +100,8 @@ Int_t StPicoTowerTest::Init()
   }
 
   MapTower_RunID_NHits_TowerID = new TH2D("MapTower_RunID_NHits_TowerID","MapTower_RunID_NHits_TowerID;runIndex;towerID", nRuns+1,0,nRuns+1,4800,0,4800);
-  MapTower_RunID_Energy_TowerID = new TH2D("MapTower_RunID_Energy_TowerID","MapTower_RunID_Energy_TowerID;runIndex;towerID", nRuns+1,0,nRuns+1,4800,0,4800);
+  MapTower_RunID_Energy_TowerID = new TH2D("MapTower_RunID_Energy_TowerID","MapTower_RunID_Energy_TowerID_ET;runIndex;towerID", nRuns+1,0,nRuns+1,4800,0,4800);
+  MapTower_RunID_Energy_TowerID_energy = new TH2D("MapTower_RunID_Energy_TowerID_energy","MapTower_RunID_Energy_TowerID_energy;runIndex;towerID", nRuns+1,0,nRuns+1,4800,0,4800);
   MapTower_RunID_NEvents = new TH1D("MapTower_RunID_NEvents", "MapTower_RunID_NEvents", nRuns+1,0,nRuns+1);
   vtxr = new TH2D("vtxr",";PVtx.x() [cm]; PVtx.y() [cm]",100,-3,3,100,-3,3);
 
@@ -142,6 +143,7 @@ Int_t StPicoTowerTest::Finish()
   vtxr->Write();
   MapTower_RunID_NHits_TowerID->Write();
   MapTower_RunID_Energy_TowerID->Write();
+  MapTower_RunID_Energy_TowerID_energy->Write();
   MapTower_RunID_NEvents->Write();
 
   hRunPxl1->Write();
@@ -228,8 +230,8 @@ Int_t StPicoTowerTest::Make()
     if (realtowID < 1 || realtowID > 4800) continue;   // guard the TowerCoeff index
 
     // Calibrated energy E = C*(ADC-Pedestal)
-    const Double_t energy = TowerCoeff[realtowID-1]*(towHit->adc() - sPed[iTow]);
-
+    //const Double_t energy = TowerCoeff[realtowID-1]*(towHit->adc() - sPed[iTow]);
+    const Double_t energy = towHit->energy();  // already calibrated 
     // E_T = E/cosh(eta) <= E, so E <= ETmin can never pass E_T > 0.2.
     // Skip before the (expensive) position calculation. Towers with bad status are
     // deliberately NOT skipped: this is a QA study that needs to see them.
@@ -240,7 +242,8 @@ Int_t StPicoTowerTest::Make()
     const double E_T = energy/cosh(towerPosition.pseudoRapidity());
     if (E_T > 0.2){
       MapTower_RunID_NHits_TowerID->Fill(runIdx, iTow);
-      MapTower_RunID_Energy_TowerID->Fill(runIdx, iTow, energy);
+      MapTower_RunID_Energy_TowerID_energy->Fill(runIdx, iTow, energy);
+      MapTower_RunID_Energy_TowerID->Fill(runIdx, iTow, E_T);
     }
   }
 
@@ -279,13 +282,21 @@ Double_t StPicoTowerTest::vertexCorrectedEta(double eta, double vz) {
     return eta_corr;
 }
 
+// bool StPicoTowerTest::isGoodEvent()
+// {
+//   StPicoEvent *event = (StPicoEvent *)picoDst->event();
+//   return (isMBTrigger(mYear) &&
+//       sqrt(event->primaryVertex().x()*event->primaryVertex().x()+event->primaryVertex().y()*event->primaryVertex().y()) < mycuts::vz &&
+//       fabs(event->primaryVertex().z()) < mycuts::vz &&
+//       fabs(event->primaryVertex().z() - event->vzVpd()) < mycuts::vzVpdVz);
+// }
 bool StPicoTowerTest::isGoodEvent()
 {
   StPicoEvent *event = (StPicoEvent *)picoDst->event();
+  const float vz = event->primaryVertex().z();
   return (isMBTrigger(mYear) &&
-      sqrt(event->primaryVertex().x()*event->primaryVertex().x()+event->primaryVertex().y()*event->primaryVertex().y()) < mycuts::vz &&
-      fabs(event->primaryVertex().z()) < mycuts::vz &&
-      fabs(event->primaryVertex().z() - event->vzVpd()) < mycuts::vzVpdVz);
+      vz > mycuts::vzMin && vz < mycuts::vzMax &&
+      fabs(vz - event->vzVpd()) < mycuts::vzVpdVz);
 }
 
 bool StPicoTowerTest::isMBTrigger(int mYear)

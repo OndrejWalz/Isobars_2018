@@ -1,2 +1,0 @@
-# bad towers in runs: towers bad in 1..10 kept runs, listed for those runs only (kept runs only)
-# runId runIndex towerID reason   (D dead, H hot, N <nHits> 3sigma, E <E> 3sigma)
